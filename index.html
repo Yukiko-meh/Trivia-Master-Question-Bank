@@ -1,0 +1,319 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Trivia Master 題庫</title>
+<style>
+  :root {
+    --bg: #f6f5f1; --card: #ffffff; --text: #1f2430; --muted: #6b7280;
+    --line: #e4e2da; --accent: #3b5bdb; --accent-soft: #e7ecff;
+    --good: #2b8a3e; --good-soft: #e3f6e8; --bad: #c92a2a; --bad-soft: #fde8e8;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #14161c; --card: #1d2029; --text: #eceef3; --muted: #9aa1b2;
+      --line: #2c303c; --accent: #7c93ff; --accent-soft: #263055;
+      --good: #69db7c; --good-soft: #1c3526; --bad: #ff8787; --bad-soft: #3a2024;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font-family: -apple-system, "Noto Sans TC", "PingFang TC", "Microsoft JhengHei", sans-serif;
+    line-height: 1.6;
+  }
+  .wrap { max-width: 760px; margin: 0 auto; padding: 24px 16px 64px; }
+  header h1 { margin: 0; font-size: 1.7rem; letter-spacing: .02em; }
+  header p { margin: 4px 0 0; color: var(--muted); }
+  nav { display: flex; gap: 8px; margin: 20px 0; flex-wrap: wrap; }
+  nav button, .btn {
+    font: inherit; cursor: pointer; border: 1px solid var(--line); background: var(--card);
+    color: var(--text); padding: 8px 16px; border-radius: 999px;
+  }
+  nav button.active, .btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .btn:disabled { opacity: .5; cursor: not-allowed; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 18px; margin-bottom: 12px; }
+  .toolbar { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 14px; }
+  input, select, textarea {
+    font: inherit; color: var(--text); background: var(--card);
+    border: 1px solid var(--line); border-radius: 10px; padding: 8px 12px; max-width: 100%;
+  }
+  input[type=search] { flex: 1; min-width: 160px; }
+  .tag { display: inline-block; font-size: .78rem; background: var(--accent-soft); color: var(--accent); padding: 2px 10px; border-radius: 999px; margin-right: 6px; }
+  .q { font-size: 1.05rem; margin: 8px 0; }
+  details summary { cursor: pointer; color: var(--accent); }
+  .answer { margin-top: 6px; font-weight: 600; }
+  .options { display: grid; gap: 8px; margin-top: 12px; }
+  .opt {
+    text-align: left; font: inherit; cursor: pointer; padding: 12px 14px; border-radius: 10px;
+    border: 1px solid var(--line); background: var(--card); color: var(--text);
+  }
+  .opt:hover:not(:disabled) { border-color: var(--accent); }
+  .opt.correct { background: var(--good-soft); border-color: var(--good); }
+  .opt.wrong { background: var(--bad-soft); border-color: var(--bad); }
+  .progress { height: 6px; background: var(--line); border-radius: 999px; overflow: hidden; margin-bottom: 14px; }
+  .progress > div { height: 100%; background: var(--accent); transition: width .25s; }
+  .big { font-size: 2.4rem; font-weight: 700; margin: 6px 0; }
+  .muted { color: var(--muted); font-size: .9rem; }
+  label { display: block; margin: 12px 0 4px; font-weight: 600; font-size: .92rem; }
+  .full { width: 100%; }
+  .row { display: flex; gap: 8px; align-items: center; margin-top: 6px; }
+  .row input[type=text] { flex: 1; }
+  .actions { margin-top: 16px; display: flex; gap: 8px; flex-wrap: wrap; }
+  .del { color: var(--bad); background: none; border: none; cursor: pointer; font: inherit; padding: 0; margin-left: 8px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>🎯 Trivia Master 題庫</h1>
+    <p>瀏覽題目、挑戰測驗、加入你自己的題目。</p>
+  </header>
+  <nav id="tabs">
+    <button data-tab="browse" class="active">題庫瀏覽</button>
+    <button data-tab="quiz">開始測驗</button>
+    <button data-tab="add">新增題目</button>
+  </nav>
+  <main id="view"></main>
+</div>
+
+<script>
+const BASE = [
+  // 地理
+  { c: "地理", q: "世界上面積最大的國家是?", o: ["加拿大", "美國", "俄羅斯", "中國"], a: 2 },
+  { c: "地理", q: "尼羅河流經下列哪個國家?", o: ["埃及", "印度", "巴西", "泰國"], a: 0 },
+  { c: "地理", q: "台灣最高的山是?", o: ["雪山", "玉山", "合歡山", "阿里山"], a: 1 },
+  { c: "地理", q: "澳洲的首都是?", o: ["雪梨", "墨爾本", "坎培拉", "伯斯"], a: 2 },
+  { c: "地理", q: "日本面積最大的島嶼是?", o: ["北海道", "九州", "四國", "本州"], a: 3 },
+  // 科學
+  { c: "科學", q: "水的化學式是?", o: ["CO2", "H2O", "O2", "NaCl"], a: 1 },
+  { c: "科學", q: "太陽系中體積最大的行星是?", o: ["土星", "地球", "木星", "海王星"], a: 2 },
+  { c: "科學", q: "人體最大的器官是?", o: ["肝臟", "皮膚", "大腦", "小腸"], a: 1 },
+  { c: "科學", q: "光在真空中的速度約為每秒多少公里?", o: ["3 萬", "30 萬", "300 萬", "3000 萬"], a: 1 },
+  { c: "科學", q: "元素週期表中,原子序為 1 的元素是?", o: ["氦", "氧", "氫", "碳"], a: 2 },
+  { c: "科學", q: "DNA 的中文全名是?", o: ["核糖核酸", "去氧核糖核酸", "胺基酸", "脂肪酸"], a: 1 },
+  // 歷史
+  { c: "歷史", q: "第一次世界大戰開始於哪一年?", o: ["1905", "1914", "1939", "1945"], a: 1 },
+  { c: "歷史", q: "秦始皇統一六國是在西元前哪一年?", o: ["221 年", "206 年", "475 年", "100 年"], a: 0 },
+  { c: "歷史", q: "哥倫布首次抵達美洲是在哪一年?", o: ["1292", "1392", "1492", "1592"], a: 2 },
+  { c: "歷史", q: "第二次世界大戰於哪一年結束?", o: ["1943", "1944", "1945", "1946"], a: 2 },
+  { c: "歷史", q: "最著名的古埃及金字塔群位於哪個地點?", o: ["吉薩", "雅典", "巴比倫", "耶路撒冷"], a: 0 },
+  // 藝文
+  { c: "藝文", q: "《哈利波特》系列的作者是?", o: ["托爾金", "J.K. 羅琳", "C.S. 路易斯", "羅爾德·達爾"], a: 1 },
+  { c: "藝文", q: "《蒙娜麗莎》的作者是?", o: ["梵谷", "畢卡索", "達文西", "米開朗基羅"], a: 2 },
+  { c: "藝文", q: "《紅樓夢》一般認為作者是?", o: ["吳承恩", "施耐庵", "羅貫中", "曹雪芹"], a: 3 },
+  // 體育
+  { c: "體育", q: "夏季奧運會每幾年舉辦一次?", o: ["2 年", "3 年", "4 年", "5 年"], a: 2 },
+  { c: "體育", q: "足球比賽中,每隊場上同時有幾名球員(含守門員)?", o: ["9", "10", "11", "12"], a: 2 },
+  { c: "體育", q: "標準馬拉松的全長約為?", o: ["21.0975 公里", "32 公里", "42.195 公里", "50 公里"], a: 2 },
+  // 科技
+  { c: "科技", q: "HTML 的全名是?", o: ["HyperText Markup Language", "High Tech Modern Language", "Hyper Transfer Markup Link", "Home Tool Markup Language"], a: 0 },
+  { c: "科技", q: "CPU 的中文名稱是?", o: ["圖形處理器", "中央處理器", "記憶體", "硬碟"], a: 1 },
+  { c: "科技", q: "1 byte 等於幾個 bit?", o: ["4", "8", "16", "32"], a: 1 },
+  // 美食
+  { c: "美食", q: "珍珠奶茶起源於哪個地方?", o: ["日本", "韓國", "台灣", "香港"], a: 2 },
+  { c: "美食", q: "披薩(Pizza)最一般認為起源於義大利哪個城市?", o: ["羅馬", "米蘭", "那不勒斯", "威尼斯"], a: 2 }
+].map((x, i) => ({ ...x, id: "b" + i, custom: false }));
+
+const STORE_KEY = "trivia-master-custom-v1";
+function loadCustom() {
+  try { return JSON.parse(localStorage.getItem(STORE_KEY)) || []; } catch (e) { return []; }
+}
+function saveCustom(list) {
+  try { localStorage.setItem(STORE_KEY, JSON.stringify(list)); } catch (e) {}
+}
+let custom = loadCustom();
+const all = () => BASE.concat(custom);
+const cats = () => [...new Set(all().map(x => x.c))];
+
+const view = document.getElementById("view");
+const LETTERS = ["A", "B", "C", "D"];
+
+function el(tag, props = {}, ...kids) {
+  const n = document.createElement(tag);
+  for (const [k, v] of Object.entries(props)) {
+    if (k === "class") n.className = v;
+    else if (k.startsWith("on")) n.addEventListener(k.slice(2), v);
+    else if (k === "text") n.textContent = v;
+    else n.setAttribute(k, v);
+  }
+  kids.flat().forEach(k => n.append(k));
+  return n;
+}
+function shuffle(a) {
+  a = a.slice();
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+function catSelect(withAll, id) {
+  const s = el("select", { id });
+  if (withAll) s.append(el("option", { value: "", text: "全部分類" }));
+  cats().forEach(c => s.append(el("option", { value: c, text: c })));
+  return s;
+}
+
+/* ---------- 瀏覽 ---------- */
+function renderBrowse() {
+  view.replaceChildren();
+  const search = el("input", { type: "search", placeholder: "搜尋題目…" });
+  const sel = catSelect(true, "bc");
+  const list = el("div");
+  const count = el("p", { class: "muted" });
+
+  function draw() {
+    const kw = search.value.trim().toLowerCase();
+    const items = all().filter(x =>
+      (!sel.value || x.c === sel.value) &&
+      (!kw || (x.q + x.o.join("")).toLowerCase().includes(kw)));
+    count.textContent = `共 ${items.length} 題`;
+    list.replaceChildren(...items.map(x => {
+      const card = el("div", { class: "card" },
+        el("div", {}, el("span", { class: "tag", text: x.c }),
+          x.custom ? el("span", { class: "tag", text: "自訂" }) : ""),
+        el("div", { class: "q", text: x.q }),
+        el("details", {},
+          el("summary", { text: "顯示答案" }),
+          el("div", { class: "answer", text: `${LETTERS[x.a]}. ${x.o[x.a]}` }),
+          el("div", { class: "muted", text: "選項:" + x.o.map((o, i) => `${LETTERS[i]}. ${o}`).join("  ") })));
+      if (x.custom) {
+        card.querySelector("div").append(el("button", {
+          class: "del", text: "刪除",
+          onclick: () => {
+            custom = custom.filter(c => c.id !== x.id);
+            saveCustom(custom);
+            renderBrowse();
+          }
+        }));
+      }
+      return card;
+    }));
+  }
+  search.addEventListener("input", draw);
+  sel.addEventListener("change", draw);
+  view.append(el("div", { class: "toolbar" }, search, sel), count, list);
+  draw();
+}
+
+/* ---------- 測驗 ---------- */
+function renderQuizSetup() {
+  view.replaceChildren();
+  const sel = catSelect(true, "qc");
+  const num = el("select", { id: "qn" },
+    ...[5, 10, 15, 20].map(n => el("option", { value: n, text: `${n} 題` })));
+  num.value = "10";
+  view.append(el("div", { class: "card" },
+    el("h2", { text: "開始測驗", style: "margin-top:0" }),
+    el("label", { text: "分類" }), sel,
+    el("label", { text: "題數(題庫不足時會取全部)" }), num,
+    el("div", { class: "actions" },
+      el("button", { class: "btn primary", text: "開始", onclick: () => startQuiz(sel.value, +num.value) }))));
+}
+
+function startQuiz(cat, n) {
+  const pool = all().filter(x => !cat || x.c === cat);
+  if (!pool.length) { view.replaceChildren(el("p", { text: "這個分類沒有題目。" })); return; }
+  // 每題選項順序也隨機
+  const qs = shuffle(pool).slice(0, n).map(x => {
+    const order = shuffle(x.o.map((t, i) => i));
+    return { c: x.c, q: x.q, o: order.map(i => x.o[i]), a: order.indexOf(x.a) };
+  });
+  let idx = 0, score = 0;
+
+  function show() {
+    view.replaceChildren();
+    if (idx >= qs.length) return finish();
+    const cur = qs[idx];
+    const opts = el("div", { class: "options" });
+    const next = el("button", {
+      class: "btn primary", text: idx === qs.length - 1 ? "查看結果" : "下一題",
+      onclick: () => { idx++; show(); }
+    });
+    next.disabled = true;
+    cur.o.forEach((t, i) => {
+      const b = el("button", { class: "opt", text: `${LETTERS[i]}. ${t}` });
+      b.addEventListener("click", () => {
+        [...opts.children].forEach((c, j) => {
+          c.disabled = true;
+          if (j === cur.a) c.classList.add("correct");
+        });
+        if (i === cur.a) score++; else b.classList.add("wrong");
+        next.disabled = false;
+      });
+      opts.append(b);
+    });
+    view.append(
+      el("div", { class: "progress" }, el("div", { style: `width:${(idx / qs.length) * 100}%` })),
+      el("div", { class: "card" },
+        el("div", { class: "muted", text: `第 ${idx + 1} / ${qs.length} 題 · ${cur.c}` }),
+        el("div", { class: "q", text: cur.q }), opts,
+        el("div", { class: "actions" }, next)));
+  }
+
+  function finish() {
+    const pct = Math.round((score / qs.length) * 100);
+    const msg = pct === 100 ? "太強了,全對!" : pct >= 70 ? "表現很好!" : pct >= 40 ? "還不錯,再練習一下。" : "加油,再試一次吧。";
+    view.replaceChildren(el("div", { class: "card" },
+      el("div", { class: "muted", text: "測驗完成" }),
+      el("div", { class: "big", text: `${score} / ${qs.length}` }),
+      el("p", { text: `答對率 ${pct}%。${msg}` }),
+      el("div", { class: "actions" },
+        el("button", { class: "btn primary", text: "再玩一次", onclick: () => startQuiz(cat, n) }),
+        el("button", { class: "btn", text: "回設定", onclick: renderQuizSetup }))));
+  }
+  show();
+}
+
+/* ---------- 新增 ---------- */
+function renderAdd() {
+  view.replaceChildren();
+  const cat = el("input", { type: "text", class: "full", placeholder: "例如:地理(可輸入新分類)", list: "catlist" });
+  const dl = el("datalist", { id: "catlist" }, ...cats().map(c => el("option", { value: c })));
+  const q = el("textarea", { class: "full", rows: "2", placeholder: "輸入題目" });
+  const opts = [0, 1, 2, 3].map(i => el("input", { type: "text", placeholder: `選項 ${LETTERS[i]}` }));
+  const radios = [0, 1, 2, 3].map(i => el("input", { type: "radio", name: "ans", value: i }));
+  radios[0].checked = true;
+  const msg = el("p", { class: "muted" });
+
+  const rows = opts.map((o, i) => el("div", { class: "row" },
+    el("label", { style: "margin:0;display:flex;align-items:center;gap:6px" }, radios[i], LETTERS[i] + "."), o));
+
+  view.append(el("div", { class: "card" },
+    el("h2", { text: "新增題目", style: "margin-top:0" }),
+    el("p", { class: "muted", text: "新增的題目只會存在這個瀏覽器裡(localStorage),不會上傳。" }),
+    el("label", { text: "分類" }), cat, dl,
+    el("label", { text: "題目" }), q,
+    el("label", { text: "選項(勾選正確答案)" }), ...rows,
+    el("div", { class: "actions" },
+      el("button", {
+        class: "btn primary", text: "加入題庫",
+        onclick: () => {
+          const o = opts.map(x => x.value.trim());
+          if (!cat.value.trim() || !q.value.trim() || o.some(x => !x)) {
+            msg.textContent = "請完整填寫分類、題目與四個選項。"; return;
+          }
+          const a = +radios.find(r => r.checked).value;
+          custom.push({ id: "c" + Date.now(), c: cat.value.trim(), q: q.value.trim(), o, a, custom: true });
+          saveCustom(custom);
+          msg.textContent = `已加入!目前共 ${all().length} 題。`;
+          q.value = ""; opts.forEach(x => x.value = "");
+        }
+      })),
+    msg));
+}
+
+/* ---------- 切換 ---------- */
+const tabs = { browse: renderBrowse, quiz: renderQuizSetup, add: renderAdd };
+document.getElementById("tabs").addEventListener("click", e => {
+  const t = e.target.dataset.tab;
+  if (!t) return;
+  document.querySelectorAll("#tabs button").forEach(b => b.classList.toggle("active", b === e.target));
+  tabs[t]();
+});
+renderBrowse();
+</script>
+</body>
+</html>
