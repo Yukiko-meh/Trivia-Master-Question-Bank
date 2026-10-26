@@ -1,0 +1,7 @@
+{
+  "name": "quiz-live",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "知識競賽:掃同一個 QR 碼,作答相同題目,即時排行榜"
+}
