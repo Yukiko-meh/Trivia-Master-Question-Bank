@@ -1,0 +1,26 @@
+# 小小知識王(Firebase 版)
+
+大家掃同一個 QR 碼,作答相同題目,完成後看到排行榜。成績存在 Firebase Firestore,網站放在 GitHub Pages,不需要自己的伺服器。
+
+## 怎麼玩
+1. 主辦人開 `quiz-fire/`,選年級和題數,按「建立比賽」,投影或印出 QR 碼。
+2. 「開啟大螢幕排行榜」會在大螢幕即時顯示名次。
+3. 參加者掃碼、輸入暱稱、作答。答完自動送出並看到排行榜。
+4. 排名:答對題數多的在前,同分比總作答時間,短的在前。
+
+## 設定 Firebase(只做一次)
+1. 到 https://console.firebase.google.com 建立專案(Analytics 可以關掉)。
+2. 左側「建構 → Firestore Database → 建立資料庫」,選離臺灣近的位置(如 asia-east1),先用正式模式。
+3. Firestore 的「規則」分頁,貼上 `firestore.rules` 的全部內容,按「發布」。
+4. 專案設定(齒輪)→「一般」→「你的應用程式」→ 新增網頁應用程式 `</>` → 複製 `firebaseConfig`。
+5. 把設定貼進 `firebase-config.js`,提交到 GitHub。
+
+## 部署
+GitHub 儲存庫 Settings → Pages → 從 `main` 分支根目錄發布,網址是
+`https://<帳號>.github.io/<儲存庫>/quiz-fire/`
+
+## 注意
+- 題目由房間代碼決定,不用先建立房間。
+- 分數由瀏覽器計算,懂技術的人可以偽造成績。適合課堂與校內活動,不適合有獎金的正式賽。
+- 題庫放在公開儲存庫,比賽前題目並不保密。
+- 想清除成績:Firebase 控制台 → Firestore → rooms 下刪除該房間。
