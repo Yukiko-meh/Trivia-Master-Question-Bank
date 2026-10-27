@@ -4,7 +4,7 @@ service cloud.firestore {
     // 每場比賽(房間)的成績:任何人可讀;只能新增一次,不能改、不能刪。
     match /rooms/{room}/scores/{id} {
       allow read: if true;
-      allow create: if room.matches('^(g[1-6]|j[1-3])-[0-9]{1,2}-[a-z0-9]{3,8}$')
+      allow create: if room.matches('^(g[1-6]|j[1-3])-[0-9]{1,2}-([cmnsef]{1,6}-)?[a-z0-9]{3,8}$')
         && request.resource.data.keys().hasOnly(['name','score','total','ms','key','at'])
         && request.resource.data.keys().hasAll(['name','score','total','ms','key','at'])
         && request.resource.data.name is string
