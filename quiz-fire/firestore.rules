@@ -11,7 +11,7 @@ service cloud.firestore {
         && request.resource.data.name == id
         && id.size() >= 1 && id.size() <= 8
         && request.resource.data.total is int
-        && request.resource.data.total >= 1 && request.resource.data.total <= 12
+        && request.resource.data.total >= 1 && request.resource.data.total <= 20
         && request.resource.data.score is int
         && request.resource.data.score >= 0
         && request.resource.data.score <= request.resource.data.total

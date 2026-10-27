@@ -44,6 +44,7 @@ button,input{font:inherit;color:inherit}
 .hero h1{font-size:2.4rem;color:var(--accent);letter-spacing:.06em;line-height:1.2}
 .hero p{color:var(--muted);margin-top:4px}
 .grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+.grid4{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
 .stp{display:flex;align-items:center;gap:10px}
 .stp i{font-style:normal;display:inline-grid;place-items:center;width:34px;height:34px;border-radius:50%;background:var(--sun);color:#3B2F00;font-size:1rem;flex:none}
 .chips{display:flex;flex-wrap:wrap;gap:10px}
@@ -114,7 +115,7 @@ button,input{font:inherit;color:inherit}
     </div>
     <div class="card">
       <h2 class="stp"><i>3</i>題數</h2>
-      <div class="grid3" id="gN" style="margin-top:12px"></div>
+      <div class="grid4" id="gN" style="margin-top:12px"></div>
       <p class="sub" id="gH" style="margin-top:10px"></p>
     </div>
     <button class="btn big" id="mk">建立比賽</button>
@@ -244,15 +245,15 @@ function drawCreate() {
     s.appendChild(b);
   });
   const pool = poolSize(cfg.grade, subjStr());
-  const opts = [5, 10, 12].filter((v) => v <= pool);
+  const NS = [5, 10, 15, 20], opts = NS.filter((v) => v <= pool);
   if (pool < 5) opts.push(pool);
   if (pool > 12 || !opts.length) { /* 不會發生:每科至少 4 題 */ }
   if (!opts.includes(cfg.n)) cfg.n = opts.includes(10) ? 10 : opts[opts.length - 1];
-  [5, 10, 12].concat(pool < 5 ? [pool] : []).forEach((v) => {
+  NS.concat(pool < 5 ? [pool] : []).forEach((v) => {
     const b = document.createElement("button"); b.className = "pick" + (cfg.n === v ? " on" : ""); b.textContent = v + " 題"; b.disabled = !opts.includes(v);
     b.onclick = () => { cfg.n = v; drawCreate(); }; n.appendChild(b);
   });
-  $("#gH").textContent = `這個年級、這些科目共有 ${pool} 題可以抽。` + (pool < 12 ? "題數多的選項會自動停用。" : "");
+  $("#gH").textContent = `這個年級、這些科目共有 ${pool} 題可以抽。` + (pool < 20 ? "題數多的選項會自動停用。" : "");
 }
 function code() { const c = "abcdefghjkmnpqrstuvwxyz23456789"; let s = ""; for (let i = 0; i < 4; i++) s += c[Math.floor(Math.random() * c.length)]; return s; }
 function shareView(r) {
