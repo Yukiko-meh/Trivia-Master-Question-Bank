@@ -105,7 +105,7 @@ button,input{font:inherit;color:inherit}
   <section id="v-create" hidden>
     <div class="hero"><h1>小小知識王</h1><p>大家掃同一個 QR 碼,答一樣的題目,比出排行榜</p></div>
     <div class="card">
-      <h2 class="stp"><i>1</i>選年級</h2>
+      <h2 class="stp"><i>1</i>選年級(可以多選)</h2>
       <div class="lbl" style="margin-top:0">小學</div><div class="grid3" id="gP"></div>
       <div class="lbl">國中</div><div class="grid3" id="gJ"></div>
     </div>
@@ -215,6 +215,7 @@ const $ = (s) => document.querySelector(s);
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const LT = ["A", "B", "C", "D"];
 const gname = (g) => (GR.find((x) => x[0] === g) || [])[1] || "";
+const gnames = (gs) => (gs.length <= 3 ? gs.map(gname).join("、") : `${gs.length} 個年級`);
 const show = (id) => { document.querySelectorAll("section").forEach((s) => (s.hidden = s.id !== "v-" + id)); $("#err").hidden = true; window.scrollTo(0, 0); };
 const fail = (m) => { const e = $("#err"); e.textContent = m; e.hidden = false; };
 const store = {
@@ -234,19 +235,20 @@ const base = location.origin + location.pathname;
 const joinUrl = (r) => `${base}?r=${r}`;
 
 /* ---------- 建立比賽 ---------- */
-const cfg = { grade: "g3", n: 10, subj: new Set(ALL.split("")) };
+const cfg = { grades: new Set(["g3"]), n: 10, subj: new Set(ALL.split("")) };
+const gradesArr = () => GR.map((x) => x[0]).filter((g) => cfg.grades.has(g));
 const subjStr = () => ALL.split("").filter((c) => cfg.subj.has(c)).join("");
 const sname = (s) => (s === ALL ? "全部科目" : SUBJECTS.filter(([c]) => s.includes(c)).map((x) => x[1]).join("、"));
 function drawCreate() {
   const p = $("#gP"), j = $("#gJ"), n = $("#gN"), s = $("#gS"); p.innerHTML = j.innerHTML = n.innerHTML = s.innerHTML = "";
-  GR.forEach(([g, t]) => { const b = document.createElement("button"); b.className = "pick" + (cfg.grade === g ? " on" : ""); b.textContent = t; b.onclick = () => { cfg.grade = g; drawCreate(); }; (g[0] === "g" ? p : j).appendChild(b); });
+  GR.forEach(([g, t]) => { const b = document.createElement("button"); b.className = "pick" + (cfg.grades.has(g) ? " on" : ""); b.setAttribute("aria-pressed", cfg.grades.has(g)); b.textContent = t; b.onclick = () => { if (cfg.grades.has(g)) { if (cfg.grades.size > 1) cfg.grades.delete(g); } else cfg.grades.add(g); drawCreate(); }; (g[0] === "g" ? p : j).appendChild(b); });
   SUBJECTS.forEach(([c, t, e]) => {
     const b = document.createElement("button"); b.className = "chip" + (cfg.subj.has(c) ? " on" : ""); b.setAttribute("aria-pressed", cfg.subj.has(c));
     b.innerHTML = `<span aria-hidden="true">${e}</span>${t}`;
     b.onclick = () => { if (cfg.subj.has(c)) { if (cfg.subj.size > 1) cfg.subj.delete(c); } else cfg.subj.add(c); drawCreate(); };
     s.appendChild(b);
   });
-  const pool = poolSize(cfg.grade, subjStr());
+  const pool = poolSize(gradesArr(), subjStr());
   const NS = [5, 10, 15, 20], opts = NS.filter((v) => v <= pool);
   if (pool < 5) opts.push(pool);
   if (pool > 12 || !opts.length) { /* 不會發生:每科至少 4 題 */ }
@@ -255,19 +257,19 @@ function drawCreate() {
     const b = document.createElement("button"); b.className = "pick" + (cfg.n === v ? " on" : ""); b.textContent = v + " 題"; b.disabled = !opts.includes(v);
     b.onclick = () => { cfg.n = v; drawCreate(); }; n.appendChild(b);
   });
-  $("#gH").textContent = `這個年級、這些科目共有 ${pool} 題可以抽。` + (pool < 20 ? "題數多的選項會自動停用。" : "");
+  $("#gH").textContent = `這些年級、這些科目共有 ${pool} 題可以抽。` + (pool < 20 ? "題數多的選項會自動停用。" : "");
 }
 function code() { const c = "abcdefghjkmnpqrstuvwxyz23456789"; let s = ""; for (let i = 0; i < 4; i++) s += c[Math.floor(Math.random() * c.length)]; return s; }
 function shareView(r) {
   const info = parseRoom(r), url = joinUrl(r);
   $("#sh-t").textContent = "比賽已建立";
-  $("#sh-s").textContent = `${gname(info.grade)} · ${sname(info.subj)} · ${info.n} 題 · 代碼 ${r.split("-").pop().toUpperCase()}`;
+  $("#sh-s").textContent = `${gnames(info.grades)} · ${sname(info.subj)} · ${info.n} 題 · 代碼 ${r.split("-").pop().toUpperCase()}`;
   $("#sh-qr").innerHTML = qrSvg(url);
   $("#sh-link").textContent = url;
   $("#sh-board").href = `${base}?r=${r}&view=board`;
   $("#sh-board").target = "_blank";
   $("#sh-new").onclick = () => {
-    const nr = newRoom(info.grade, info.n, info.subj);
+    const nr = newRoom(info.grades.join(""), info.n, info.subj);
     history.replaceState(null, "", `?host=1&r=${nr}`); shareView(nr);
     const m = $("#sh-newn"); m.textContent = "已換成新的題目,舊的 QR 碼作廢,請用新的 QR 碼。排行榜也會重新計算。"; m.hidden = false;
   };
@@ -276,8 +278,8 @@ function shareView(r) {
   $("#sh-copy").onclick = async () => { try { await navigator.clipboard.writeText(url); $("#sh-copy").textContent = "已複製"; } catch { $("#sh-copy").textContent = "請長按上方連結複製"; } };
   show("share");
 }
-const newRoom = (grade, n, sj) => `${grade}-${n}-${sj === ALL ? "" : sj + "-"}${code()}`;
-$("#mk").onclick = () => { const r = newRoom(cfg.grade, cfg.n, subjStr()); history.replaceState(null, "", `?host=1&r=${r}`); shareView(r); };
+const newRoom = (grades, n, sj) => `${grades}-${n}-${sj === ALL ? "" : sj + "-"}${code()}`;
+$("#mk").onclick = () => { const r = newRoom(gradesArr().join(""), cfg.n, subjStr()); history.replaceState(null, "", `?host=1&r=${r}`); shareView(r); };
 
 /* ---------- 加入與作答 ---------- */
 function joinView(r) {
@@ -285,7 +287,7 @@ function joinView(r) {
   if (!info) { show("create"); fail("這個比賽連結不正確,請向主辦人再要一次 QR 碼。"); return; }
   const done = store.get("done:" + r);
   if (done) { endView(r, done); return; }
-  $("#jn-s").textContent = `${gname(info.grade)} · ${sname(info.subj)} · 共 ${info.n} 題`;
+  $("#jn-s").textContent = `${gnames(info.grades)} · ${sname(info.subj)} · 共 ${info.n} 題`;
   $("#nick").value = store.get("nick") || "";
   $("#go").onclick = () => { const n = $("#nick").value.replace(/[\/\s]+/g, " ").trim().slice(0, 8); if (!n) { $("#nick").focus(); return; } store.set("nick", n); play(r, n); };
   show("join");
@@ -295,7 +297,7 @@ let S;
 function play(r, name) {
   const qs = shuffle(pickQuestions(r)).map((q) => ({ ...q, options: shuffle(q.options) }));
   S = { r, name, qs, i: 0, ms: 0, t0: 0, ans: [], right: 0, locked: false };
-  $("#pl-g").textContent = gname(parseRoom(r).grade);
+  $("#pl-g").textContent = gnames(parseRoom(r).grades);
   show("play"); showQ();
 }
 function showQ() {
@@ -369,9 +371,9 @@ async function boardView(r) {
   if (!info) { show("create"); fail("這個比賽連結不正確。"); return; }
   document.querySelector(".app").classList.add("wide");
   $("#bd-qr").innerHTML = qrSvg(joinUrl(r));
-  $("#bd-s").textContent = `${gname(info.grade)} · ${sname(info.subj)} · ${info.n} 題 · 代碼 ${r.split("-").pop().toUpperCase()}`;
+  $("#bd-s").textContent = `${gnames(info.grades)} · ${sname(info.subj)} · ${info.n} 題 · 代碼 ${r.split("-").pop().toUpperCase()}`;
   show("board");
-  const tick = async () => { try { const b = await loadBoard(r); $("#bd-list").innerHTML = rows(b.rows.slice(0, 20), null); $("#bd-s").textContent = `${gname(info.grade)} · ${sname(info.subj)} · ${info.n} 題 · 已完成 ${b.count} 人`; } catch {} };
+  const tick = async () => { try { const b = await loadBoard(r); $("#bd-list").innerHTML = rows(b.rows.slice(0, 20), null); $("#bd-s").textContent = `${gnames(info.grades)} · ${sname(info.subj)} · ${info.n} 題 · 已完成 ${b.count} 人`; } catch {} };
   tick(); setInterval(tick, 3000);
 }
 

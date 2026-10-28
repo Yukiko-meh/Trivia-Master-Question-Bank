@@ -577,23 +577,27 @@ export const ALL="cmnsef";
 function hash(s){let h=2166136261;for(let i=0;i<s.length;i++){h^=s.charCodeAt(i);h=Math.imul(h,16777619)}return h>>>0}
 function rng(seed){let a=seed;return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}
 
-// 該年級、該組科目下有幾題可抽
-export function poolSize(grade,subj){return DB[grade].filter(r=>subj.includes(r[5])).length}
+// 這些年級、這組科目下共有幾題可抽(grades 是年級代碼陣列)
+export function poolSize(grades,subj){return grades.reduce((s,g)=>s+DB[g].filter(r=>subj.includes(r[5])).length,0)}
 
-// 房間代碼格式:年級-題數-科目-隨機碼,例如 g3-10-cmn-k7x2(舊格式 g3-10-k7x2 代表全部科目)
+// 房間代碼格式:年級-題數-科目-隨機碼
+//   例如 g3-10-cmn-k7x2;多個年級直接連寫,如 g3g4j1-10-ef-k7x2;沒有科目這一段代表全部科目
 export function parseRoom(room){
-  const m=/^(g[1-6]|j[1-3])-(\d{1,2})-(?:([cmnsef]{1,6})-)?([a-z0-9]{3,8})$/.exec(String(room||''));
-  if(!m||!DB[m[1]])return null;
+  const m=/^((?:g[1-6]|j[1-3])+)-(\d{1,2})-(?:([cmnsef]{1,6})-)?([a-z0-9]{3,8})$/.exec(String(room||''));
+  if(!m)return null;
+  const found=m[1].match(/[gj][1-6]/g);
+  const grades=GR.map(x=>x[0]).filter(g=>found.includes(g));
+  if(!grades.length||grades.length!==new Set(found).size||grades.some(g=>!DB[g]))return null;
   const subj=m[3]?ALL.split('').filter(c=>m[3].includes(c)).join(''):ALL;
-  const size=poolSize(m[1],subj);
+  const size=poolSize(grades,subj);
   if(!size)return null;
   const n=Math.max(1,Math.min(+m[2],size));
-  return {grade:m[1],n,subj,seed:m[4]};
+  return {grades,grade:grades[0],n,subj,seed:m[4]};
 }
 export function pickQuestions(room){
   const r=parseRoom(room);if(!r)return null;
   const rand=rng(hash(room)),a=[];
-  DB[r.grade].forEach((q,i)=>{if(r.subj.includes(q[5]))a.push(i)});
+  r.grades.forEach(g=>DB[g].forEach((q,i)=>{if(r.subj.includes(q[5]))a.push([g,i])}));
   for(let i=a.length-1;i>0;i--){const j=Math.floor(rand()*(i+1));[a[i],a[j]]=[a[j],a[i]]}
-  return a.slice(0,r.n).map(i=>({id:i,q:DB[r.grade][i][0],correct:DB[r.grade][i][1],options:DB[r.grade][i].slice(1,5),subj:DB[r.grade][i][5]}));
+  return a.slice(0,r.n).map(([g,i])=>{const q=DB[g][i];return {id:g+":"+i,q:q[0],correct:q[1],options:q.slice(1,5),subj:q[5],grade:g}});
 }
