@@ -341,40 +341,63 @@ function rows(list, me) {
     return `<div class="row${r.name === me ? " mine" : ""}"><span class="rk">${m}</span><span class="nm">${esc(r.name)}</span><span class="sc">${r.score}</span><span class="tm">${fmt(r.ms)}</span></div>`;
   }).join("");
 }
-async function loadBoard(r) {
+// 即時監聽排行榜:只有成績有變動時才讀變動的那幾筆,不會每隔幾秒就重讀整份(免費額度每天只有 5 萬次讀取)。
+async function watchBoard(r, lim, cb, onErr) {
   const { db, f } = await fb();
-  const snap = await f.getDocs(f.query(f.collection(db, "rooms", r, "scores"), f.orderBy("key", "desc"), f.limit(100)));
-  const rows = snap.docs.map((d) => { const o = d.data(); return { name: o.name, score: o.score, ms: o.ms }; });
-  rows.forEach((x, i) => { const p = rows[i - 1]; x.rank = p && p.score === x.score && p.ms === x.ms ? p.rank : i + 1; });
-  return { count: rows.length, rows, persistent: true };
+  const q = f.query(f.collection(db, "rooms", r, "scores"), f.orderBy("key", "desc"), f.limit(lim));
+  return f.onSnapshot(q, (snap) => {
+    const list = snap.docs.map((d) => { const o = d.data(); return { name: o.name, score: o.score, ms: o.ms }; });
+    list.forEach((x, i) => { const p = list[i - 1]; x.rank = p && p.score === x.score && p.ms === x.ms ? p.rank : i + 1; });
+    cb(list);
+  }, onErr);
 }
+// 總人數:用 Firestore 的計數功能,每 1000 筆只算 1 次讀取,所以很省。
+async function countBoard(r) {
+  try { const { db, f } = await fb(); return (await f.getCountFromServer(f.collection(db, "rooms", r, "scores"))).data().count; } catch { return null; }
+}
+const stops = [];
+function stopAll() { while (stops.length) { try { stops.pop()(); } catch {} } }
+const boardErr = '<p class="sub" style="text-align:center">排行榜暫時讀不到,請檢查網路後重新整理頁面。</p>';
 async function endView(r, d) {
+  stopAll();
   $("#me-n").textContent = d.name;
   $("#me-s").textContent = `${d.score} / ${d.total}`;
   $("#me-t").textContent = `總共用時 ${fmt(d.ms)}`;
   $("#me-r").textContent = "";
+  $("#end-note").textContent = "";
+  $("#end-refresh").hidden = true; // 排行榜會自動更新,不需要手動按
   show("end");
-  const refresh = async () => {
-    try {
-      const b = await loadBoard(r);
-      const mine = b.rows.find((x) => x.name === d.name);
-      $("#me-r").textContent = mine ? `目前第 ${mine.rank} 名(共 ${b.count} 人)` : "";
-      $("#end-board").innerHTML = rows(b.rows, d.name);
-      $("#end-note").textContent = b.persistent ? "" : "目前是測試模式,成績不會長期保存。";
-    } catch { $("#end-board").innerHTML = '<p class="sub" style="text-align:center">排行榜暫時讀不到,請稍後再按更新。</p>'; }
+  let total = null;
+  const draw = (list) => {
+    const mine = list.find((x) => x.name === d.name);
+    $("#me-r").textContent = mine ? `目前第 ${mine.rank} 名` + (total ? `(共 ${total} 人)` : "") : (list.length >= 50 ? "目前在前 50 名之外" : "");
+    $("#end-board").innerHTML = rows(list, d.name);
   };
-  $("#end-refresh").onclick = refresh; refresh();
-  clearInterval(window.__t); window.__t = setInterval(refresh, 8000);
+  let last = [];
+  try {
+    const un = await watchBoard(r, 50, (list) => { last = list; draw(list); }, () => { $("#end-board").innerHTML = boardErr; });
+    stops.push(un);
+    const upd = async () => { const c = await countBoard(r); if (c != null) { total = c; draw(last); } };
+    upd(); const t = setInterval(upd, 30000); stops.push(() => clearInterval(t));
+  } catch { $("#end-board").innerHTML = boardErr; }
 }
 async function boardView(r) {
   const info = parseRoom(r);
   if (!info) { show("create"); fail("這個比賽連結不正確。"); return; }
+  stopAll();
   document.querySelector(".app").classList.add("wide");
   $("#bd-qr").innerHTML = qrSvg(joinUrl(r));
-  $("#bd-s").textContent = `${gnames(info.grades)} · ${sname(info.subj)} · ${info.n} 題 · 代碼 ${r.split("-").pop().toUpperCase()}`;
+  const head = (n) => `${gnames(info.grades)} · ${sname(info.subj)} · ${info.n} 題` + (n == null ? ` · 代碼 ${r.split("-").pop().toUpperCase()}` : ` · 已完成 ${n} 人`);
+  $("#bd-s").textContent = head(null);
   show("board");
-  const tick = async () => { try { const b = await loadBoard(r); $("#bd-list").innerHTML = rows(b.rows.slice(0, 20), null); $("#bd-s").textContent = `${gnames(info.grades)} · ${sname(info.subj)} · ${info.n} 題 · 已完成 ${b.count} 人`; } catch {} };
-  tick(); setInterval(tick, 3000);
+  let total = 0, shown = 0;
+  const hd = () => { $("#bd-s").textContent = head(Math.max(total, shown)); };
+  try {
+    const un = await watchBoard(r, 20, (list) => { $("#bd-list").innerHTML = rows(list, null); shown = list.length; hd(); }, () => { $("#bd-list").innerHTML = boardErr; });
+    stops.push(un);
+    const upd = async () => { const c = await countBoard(r); if (c != null) { total = c; hd(); } };
+    upd(); const t = setInterval(upd, 15000); stops.push(() => clearInterval(t));
+  } catch { $("#bd-list").innerHTML = boardErr; }
 }
 
 /* ---------- 路由 ---------- */
