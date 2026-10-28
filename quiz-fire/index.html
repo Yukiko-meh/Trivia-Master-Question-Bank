@@ -44,6 +44,8 @@ button,input{font:inherit;color:inherit}
 .hero h1{font-size:2.4rem;color:var(--accent);letter-spacing:.06em;line-height:1.2}
 .hero p{color:var(--muted);margin-top:4px}
 .grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+.seg2{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}
+.btn:disabled{opacity:.45;cursor:not-allowed}
 .grid4{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
 .stp{display:flex;align-items:center;gap:10px}
 .stp i{font-style:normal;display:inline-grid;place-items:center;width:34px;height:34px;border-radius:50%;background:var(--sun);color:#3B2F00;font-size:1rem;flex:none}
@@ -118,6 +120,11 @@ button,input{font:inherit;color:inherit}
       <div class="grid4" id="gN" style="margin-top:12px"></div>
       <p class="sub" id="gH" style="margin-top:10px"></p>
     </div>
+    <div class="card">
+      <h2 class="stp"><i>4</i>開始方式</h2>
+      <div class="seg2" id="gW" style="margin-top:12px"></div>
+      <p class="sub" id="gWH" style="margin-top:10px"></p>
+    </div>
     <button class="btn big" id="mk">建立比賽</button>
   </section>
 
@@ -129,6 +136,15 @@ button,input{font:inherit;color:inherit}
       <div class="link" id="sh-link"></div>
       <button class="btn ghost" id="sh-copy">複製連結</button>
     </div>
+    <div class="card" id="sh-ctl" hidden>
+      <h2>比賽控制</h2>
+      <p class="sub" id="sh-st" style="margin-bottom:12px"></p>
+      <div style="display:flex;flex-direction:column;gap:10px">
+        <button class="btn big" id="sh-start" hidden>▶ 開始比賽</button>
+        <button class="btn big ghost" id="sh-end" hidden>結束比賽</button>
+      </div>
+    </div>
+    <p class="sub" id="sh-ctlnote" style="text-align:center" hidden></p>
     <a class="btn big" id="sh-board" style="text-align:center;text-decoration:none;display:block;line-height:38px">開啟大螢幕排行榜</a>
     <button class="btn big ghost" id="sh-play">我也要玩</button>
     <button class="btn big ghost" id="sh-new">🔀 換一組題目</button>
@@ -143,6 +159,7 @@ button,input{font:inherit;color:inherit}
       <input class="name" id="nick" maxlength="8" placeholder="最多 8 個字" autocomplete="off">
       <p class="sub" style="margin-top:8px">每個人的題目順序不同,答完會看到全班排行榜。</p>
     </div>
+    <p class="sub" id="jn-wait" style="text-align:center" hidden></p>
     <button class="btn big" id="go">開始作答</button>
   </section>
 
@@ -195,11 +212,13 @@ function fb() {
   if (!c || !c.apiKey || /^YOUR|^$/.test(c.apiKey)) return (_fb = Promise.reject(new Error("no_config")));
   const B = "https://www.gstatic.com/firebasejs/10.14.1/";
   return (_fb = Promise.all([import(B + "firebase-app.js"), import(B + "firebase-firestore.js")])
-    .then(([a, f]) => ({ db: f.getFirestore(a.initializeApp(c)), f })));
+    .then(([a, f]) => { const app = a.initializeApp(c); return { db: f.getFirestore(app), f, app, B }; }));
 }
 // 排序用單一數字:答對越多越大,同分時用時越短越大。這樣 Firestore 不用另外建索引。
 async function submitScore(room, name, score, total, ms) {
   const { db, f } = await fb();
+  const ctl = await readCtl(room).catch(() => null);
+  if (ctl && ctl.status === "closed") throw new Error("closed");
   const key = score * 10000000 - Math.min(Math.round(ms / 10), 9999999);
   for (let i = 1; i <= 20; i++) {
     const final = i === 1 ? name : name.slice(0, 6) + i;
@@ -234,8 +253,58 @@ const room = params.get("r");
 const base = location.origin + location.pathname;
 const joinUrl = (r) => `${base}?r=${r}`;
 
+/* ---------- 主辦人控制(狀態存在 rooms/<代碼>/ctl/state) ---------- */
+// 狀態:open 掃碼就能作答、waiting 等主辦人開始、running 比賽中、closed 已結束(不再收成績)
+async function myUid() {
+  const { app, B } = await fb();
+  const A = await import(B + "firebase-auth.js");
+  const auth = A.getAuth(app);
+  await auth.authStateReady();
+  if (!auth.currentUser) await A.signInAnonymously(auth);
+  return auth.currentUser.uid;
+}
+const ctlRef = (db, f, r) => f.doc(db, "rooms", r, "ctl", "state");
+async function readCtl(r) { const { db, f } = await fb(); const s = await f.getDoc(ctlRef(db, f, r)); return s.exists() ? s.data() : null; }
+async function watchCtl(r, cb) { const { db, f } = await fb(); return f.onSnapshot(ctlRef(db, f, r), (s) => cb(s.exists() ? s.data() : null), () => cb(null)); }
+async function hostCreate(r, wait) { const { db, f } = await fb(); const uid = await myUid(); await f.setDoc(ctlRef(db, f, r), { owner: uid, status: wait ? "waiting" : "open", at: Date.now() }); }
+async function hostSet(r, status) { const { db, f } = await fb(); await f.updateDoc(ctlRef(db, f, r), { status, at: Date.now() }); }
+let curRoom = null, hostWait = false, hostStop = null, endArm = false, endTimer = null;
+const STATUS_TXT = {
+  waiting: "等待開始:參賽者掃碼後會停在等待畫面,按「開始比賽」大家才能一起作答。",
+  open: "進行中:掃碼的人可以直接作答。",
+  running: "進行中:大家正在作答。",
+  closed: "已結束:不再收新成績,排行榜已鎖定。",
+};
+async function hostBind(r, create) {
+  if (hostStop) { hostStop(); hostStop = null; }
+  const box = $("#sh-ctl"), note = $("#sh-ctlnote"); box.hidden = true; note.hidden = true;
+  if (create !== undefined) hostWait = !!create;
+  try {
+    const uid = await myUid();
+    if (create !== undefined) await hostCreate(r, create);
+    const un = await watchCtl(r, (c) => {
+      if (r !== curRoom) return;
+      if (!c || c.owner !== uid) { box.hidden = true; return; }
+      box.hidden = false;
+      $("#sh-st").textContent = STATUS_TXT[c.status] || "";
+      $("#sh-start").hidden = c.status !== "waiting";
+      $("#sh-end").hidden = c.status === "closed";
+    });
+    hostStop = un;
+  } catch (e) {
+    if (create !== undefined && create) { note.textContent = "主辦人控制還不能用(Firebase 尚未開啟匿名登入)。這場比賽目前是「掃碼就開始」。"; note.hidden = false; }
+  }
+}
+$("#sh-start").onclick = async () => { try { await hostSet(curRoom, "running"); } catch { fail("開始失敗,請檢查網路後再按一次。"); } };
+$("#sh-end").onclick = async () => {
+  const b = $("#sh-end");
+  if (!endArm) { endArm = true; b.textContent = "再按一次確認結束"; clearTimeout(endTimer); endTimer = setTimeout(() => { endArm = false; b.textContent = "結束比賽"; }, 3000); return; }
+  clearTimeout(endTimer); endArm = false; b.textContent = "結束比賽";
+  try { await hostSet(curRoom, "closed"); } catch { fail("結束失敗,請檢查網路後再按一次。"); }
+};
+
 /* ---------- 建立比賽 ---------- */
-const cfg = { grades: new Set(["g3"]), n: 10, subj: new Set(ALL.split("")) };
+const cfg = { wait: false, grades: new Set(["g3"]), n: 10, subj: new Set(ALL.split("")) };
 const gradesArr = () => GR.map((x) => x[0]).filter((g) => cfg.grades.has(g));
 const subjStr = () => ALL.split("").filter((c) => cfg.subj.has(c)).join("");
 const sname = (s) => (s === ALL ? "全部科目" : SUBJECTS.filter(([c]) => s.includes(c)).map((x) => x[1]).join("、"));
@@ -257,11 +326,15 @@ function drawCreate() {
     const b = document.createElement("button"); b.className = "pick" + (cfg.n === v ? " on" : ""); b.textContent = v + " 題"; b.disabled = !opts.includes(v);
     b.onclick = () => { cfg.n = v; drawCreate(); }; n.appendChild(b);
   });
+  const w = $("#gW"); w.innerHTML = "";
+  [[false, "掃碼就開始"], [true, "等主辦人按開始"]].forEach(([v, t]) => { const b = document.createElement("button"); b.className = "pick" + (cfg.wait === v ? " on" : ""); b.textContent = t; b.onclick = () => { cfg.wait = v; drawCreate(); }; w.appendChild(b); });
+  $("#gWH").textContent = cfg.wait ? "參賽者掃碼後會先停在等待畫面,你按「開始比賽」後大家才能一起作答。需要先在 Firebase 開啟匿名登入。" : "參賽者掃碼後可以馬上作答。你仍然可以按「結束比賽」鎖定排行榜。";
   $("#gH").textContent = `這些年級、這些科目共有 ${pool} 題可以抽。` + (pool < 20 ? "題數多的選項會自動停用。" : "");
 }
 function code() { const c = "abcdefghjkmnpqrstuvwxyz23456789"; let s = ""; for (let i = 0; i < 4; i++) s += c[Math.floor(Math.random() * c.length)]; return s; }
-function shareView(r) {
+function shareView(r, create) {
   const info = parseRoom(r), url = joinUrl(r);
+  curRoom = r; hostBind(r, create);
   $("#sh-t").textContent = "比賽已建立";
   $("#sh-s").textContent = `${gnames(info.grades)} · ${sname(info.subj)} · ${info.n} 題 · 代碼 ${r.split("-").pop().toUpperCase()}`;
   $("#sh-qr").innerHTML = qrSvg(url);
@@ -270,7 +343,7 @@ function shareView(r) {
   $("#sh-board").target = "_blank";
   $("#sh-new").onclick = () => {
     const nr = newRoom(info.grades.join(""), info.n, info.subj);
-    history.replaceState(null, "", `?host=1&r=${nr}`); shareView(nr);
+    history.replaceState(null, "", `?host=1&r=${nr}`); shareView(nr, hostWait);
     const m = $("#sh-newn"); m.textContent = "已換成新的題目,舊的 QR 碼作廢,請用新的 QR 碼。排行榜也會重新計算。"; m.hidden = false;
   };
   $("#sh-newn").hidden = true;
@@ -279,7 +352,7 @@ function shareView(r) {
   show("share");
 }
 const newRoom = (grades, n, sj) => `${grades}-${n}-${sj === ALL ? "" : sj + "-"}${code()}`;
-$("#mk").onclick = () => { const r = newRoom(gradesArr().join(""), cfg.n, subjStr()); history.replaceState(null, "", `?host=1&r=${r}`); shareView(r); };
+$("#mk").onclick = () => { const r = newRoom(gradesArr().join(""), cfg.n, subjStr()); history.replaceState(null, "", `?host=1&r=${r}`); shareView(r, cfg.wait); };
 
 /* ---------- 加入與作答 ---------- */
 function joinView(r) {
@@ -289,6 +362,14 @@ function joinView(r) {
   if (done) { endView(r, done); return; }
   $("#jn-s").textContent = `${gnames(info.grades)} · ${sname(info.subj)} · 共 ${info.n} 題`;
   $("#nick").value = store.get("nick") || "";
+  stopAll();
+  const goBtn = $("#go"), wn = $("#jn-wait");
+  goBtn.disabled = false; wn.hidden = true;
+  watchCtl(r, (c) => {
+    const st = c && c.status, lock = st === "waiting" || st === "closed";
+    goBtn.disabled = lock; wn.hidden = !lock;
+    wn.textContent = st === "closed" ? "主辦人已經結束比賽,不能再作答了。" : "請等主辦人按「開始比賽」,按鈕亮起來就可以開始。";
+  }).then((un) => stops.push(un)).catch(() => {});
   $("#go").onclick = () => { const n = $("#nick").value.replace(/[\/\s]+/g, " ").trim().slice(0, 8); if (!n) { $("#nick").focus(); return; } store.set("nick", n); play(r, n); };
   show("join");
 }
@@ -330,7 +411,7 @@ $("#pl-next").onclick = async () => {
     const finalName = await submitScore(S.r, S.name, S.right, total, ms);
     const d = { name: finalName, score: S.right, total, ms };
     store.set("done:" + S.r, d); endView(S.r, d);
-  } catch (e) { nx.disabled = false; nx.textContent = "送出失敗,再按一次"; fail(e.message === "no_config" ? "這個網站還沒連上 Firebase,請主辦人完成設定。" : e.message === "name_taken" ? "這個名字已經有很多人用了,請回到上一頁換一個名字。" : "網路不穩或資料庫設定有問題,成績還沒送出。請再按一次「送出成績」。"); }
+  } catch (e) { nx.disabled = false; nx.textContent = "送出失敗,再按一次"; fail(e.message === "no_config" ? "這個網站還沒連上 Firebase,請主辦人完成設定。" : e.message === "closed" ? "主辦人已經結束比賽,成績沒有送出。" : e.message === "name_taken" ? "這個名字已經有很多人用了,請回到上一頁換一個名字。" : "網路不穩或資料庫設定有問題,成績還沒送出。請再按一次「送出成績」。"); }
 };
 
 /* ---------- 排行榜 ---------- */
@@ -390,8 +471,9 @@ async function boardView(r) {
   const head = (n) => `${gnames(info.grades)} · ${sname(info.subj)} · ${info.n} 題` + (n == null ? ` · 代碼 ${r.split("-").pop().toUpperCase()}` : ` · 已完成 ${n} 人`);
   $("#bd-s").textContent = head(null);
   show("board");
-  let total = 0, shown = 0;
-  const hd = () => { $("#bd-s").textContent = head(Math.max(total, shown)); };
+  let total = 0, shown = 0, cst = null;
+  const hd = () => { $("#bd-s").textContent = head(Math.max(total, shown)) + (cst === "waiting" ? " · 等待開始" : cst === "closed" ? " · 已結束" : ""); };
+  watchCtl(r, (c) => { cst = c && c.status; hd(); }).then((un) => stops.push(un)).catch(() => {});
   try {
     const un = await watchBoard(r, 20, (list) => { $("#bd-list").innerHTML = rows(list, null); shown = list.length; hd(); }, () => { $("#bd-list").innerHTML = boardErr; });
     stops.push(un);
