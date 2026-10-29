@@ -142,6 +142,7 @@ button,input{font:inherit;color:inherit}
       <div style="display:flex;flex-direction:column;gap:10px">
         <button class="btn big" id="sh-start" hidden>▶ 開始比賽</button>
         <button class="btn big ghost" id="sh-end" hidden>結束比賽</button>
+        <button class="btn big ghost" id="sh-del">🗑 刪除這場比賽</button>
       </div>
     </div>
     <p class="sub" id="sh-ctlnote" style="text-align:center" hidden></p>
@@ -214,6 +215,9 @@ function fb() {
   return (_fb = Promise.all([import(B + "firebase-app.js"), import(B + "firebase-firestore.js")])
     .then(([a, f]) => { const app = a.initializeApp(c); return { db: f.getFirestore(app), f, app, B }; }));
 }
+// 成績和狀態都帶一個「過期時間」,在 Firebase 設好 TTL 政策後,過期的資料會自動刪除(預設保留 30 天)。
+const TTL_DAYS = 30;
+const expireAt = (f) => f.Timestamp.fromMillis(Date.now() + TTL_DAYS * 86400000);
 // 排序用單一數字:答對越多越大,同分時用時越短越大。這樣 Firestore 不用另外建索引。
 async function submitScore(room, name, score, total, ms) {
   const { db, f } = await fb();
@@ -223,7 +227,7 @@ async function submitScore(room, name, score, total, ms) {
   for (let i = 1; i <= 20; i++) {
     const final = i === 1 ? name : name.slice(0, 6) + i;
     try {
-      await f.setDoc(f.doc(db, "rooms", room, "scores", final), { name: final, score, total, ms: Math.round(ms), key, at: Date.now() });
+      await f.setDoc(f.doc(db, "rooms", room, "scores", final), { name: final, score, total, ms: Math.round(ms), key, at: Date.now(), expireAt: expireAt(f) });
       return final;
     } catch (e) { if (e.code !== "permission-denied") throw e; } // 名字已有人用,換一個再試
   }
@@ -266,8 +270,16 @@ async function myUid() {
 const ctlRef = (db, f, r) => f.doc(db, "rooms", r, "ctl", "state");
 async function readCtl(r) { const { db, f } = await fb(); const s = await f.getDoc(ctlRef(db, f, r)); return s.exists() ? s.data() : null; }
 async function watchCtl(r, cb) { const { db, f } = await fb(); return f.onSnapshot(ctlRef(db, f, r), (s) => cb(s.exists() ? s.data() : null), () => cb(null)); }
-async function hostCreate(r, wait) { const { db, f } = await fb(); const uid = await myUid(); await f.setDoc(ctlRef(db, f, r), { owner: uid, status: wait ? "waiting" : "open", at: Date.now() }); }
+async function hostCreate(r, wait) { const { db, f } = await fb(); const uid = await myUid(); await f.setDoc(ctlRef(db, f, r), { owner: uid, status: wait ? "waiting" : "open", at: Date.now(), expireAt: expireAt(f) }); }
 async function hostSet(r, status) { const { db, f } = await fb(); await f.updateDoc(ctlRef(db, f, r), { status, at: Date.now() }); }
+// 刪除這場比賽:先刪所有成績,最後才刪狀態文件(規則要靠狀態文件確認你是主辦人)。每批 15 筆,避免超過規則的查詢次數上限。
+async function hostDelete(r) {
+  const { db, f } = await fb();
+  const snap = await f.getDocs(f.collection(db, "rooms", r, "scores"));
+  const refs = snap.docs.map((d) => d.ref);
+  for (let i = 0; i < refs.length; i += 15) { const b = f.writeBatch(db); refs.slice(i, i + 15).forEach((x) => b.delete(x)); await b.commit(); }
+  await f.deleteDoc(ctlRef(db, f, r));
+}
 let curRoom = null, hostWait = false, hostStop = null, endArm = false, endTimer = null;
 const STATUS_TXT = {
   waiting: "等待開始:參賽者掃碼後會停在等待畫面,按「開始比賽」大家才能一起作答。",
@@ -301,6 +313,20 @@ $("#sh-end").onclick = async () => {
   if (!endArm) { endArm = true; b.textContent = "再按一次確認結束"; clearTimeout(endTimer); endTimer = setTimeout(() => { endArm = false; b.textContent = "結束比賽"; }, 3000); return; }
   clearTimeout(endTimer); endArm = false; b.textContent = "結束比賽";
   try { await hostSet(curRoom, "closed"); } catch { fail("結束失敗,請檢查網路後再按一次。"); }
+};
+let delArm = false, delTimer = null;
+$("#sh-del").onclick = async () => {
+  const b = $("#sh-del");
+  if (!delArm) { delArm = true; b.textContent = "再按一次:永久刪除所有成績"; clearTimeout(delTimer); delTimer = setTimeout(() => { delArm = false; b.textContent = "🗑 刪除這場比賽"; }, 4000); return; }
+  clearTimeout(delTimer); delArm = false; b.disabled = true; b.textContent = "刪除中…";
+  try {
+    const r = curRoom; await hostDelete(r);
+    if (hostStop) { hostStop(); hostStop = null; }
+    store.set("done:" + r, null);
+    history.replaceState(null, "", location.pathname); drawCreate(); show("create");
+    fail("已刪除這場比賽的所有成績。");
+  } catch { fail("刪除失敗,請確認你用的是建立比賽的同一個瀏覽器,再按一次。"); }
+  b.disabled = false; b.textContent = "🗑 刪除這場比賽";
 };
 
 /* ---------- 建立比賽 ---------- */

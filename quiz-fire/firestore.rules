@@ -5,7 +5,7 @@ service cloud.firestore {
     match /rooms/{room}/scores/{id} {
       allow read: if true;
       allow create: if room.matches('^((g[1-6]|j[1-3])+)-[0-9]{1,2}-([cmnsef]{1,6}-)?[a-z0-9]{3,8}$')
-        && request.resource.data.keys().hasOnly(['name','score','total','ms','key','at'])
+        && request.resource.data.keys().hasOnly(['name','score','total','ms','key','at','expireAt'])
         && request.resource.data.keys().hasAll(['name','score','total','ms','key','at'])
         && request.resource.data.name is string
         && request.resource.data.name == id
@@ -19,9 +19,14 @@ service cloud.firestore {
         && request.resource.data.ms >= 0 && request.resource.data.ms <= 3600000
         && request.resource.data.key is int
         && request.resource.data.at is int
+        && (!('expireAt' in request.resource.data) || (request.resource.data.expireAt is timestamp && request.resource.data.expireAt <= request.time + duration.value(60, 'd')))
         && (!exists(/databases/$(database)/documents/rooms/$(room)/ctl/state)
             || get(/databases/$(database)/documents/rooms/$(room)/ctl/state).data.status != 'closed');
-      allow update, delete: if false;
+      allow update: if false;
+      // 只有這場比賽的主辦人能刪成績
+      allow delete: if request.auth != null
+        && exists(/databases/$(database)/documents/rooms/$(room)/ctl/state)
+        && get(/databases/$(database)/documents/rooms/$(room)/ctl/state).data.owner == request.auth.uid;
     }
 
     // 主辦人控制:狀態只有建立它的人(匿名登入的 uid)能改。
@@ -29,17 +34,18 @@ service cloud.firestore {
       allow read: if true;
       allow create: if request.auth != null
         && room.matches('^((g[1-6]|j[1-3])+)-[0-9]{1,2}-([cmnsef]{1,6}-)?[a-z0-9]{3,8}$')
-        && request.resource.data.keys().hasOnly(['owner','status','at'])
+        && request.resource.data.keys().hasOnly(['owner','status','at','expireAt'])
         && request.resource.data.owner == request.auth.uid
         && request.resource.data.status in ['open','waiting']
-        && request.resource.data.at is int;
+        && request.resource.data.at is int
+        && (!('expireAt' in request.resource.data) || (request.resource.data.expireAt is timestamp && request.resource.data.expireAt <= request.time + duration.value(60, 'd')));
       allow update: if request.auth != null
         && resource.data.owner == request.auth.uid
-        && request.resource.data.keys().hasOnly(['owner','status','at'])
+        && request.resource.data.keys().hasOnly(['owner','status','at','expireAt'])
         && request.resource.data.owner == resource.data.owner
         && request.resource.data.status in ['open','waiting','running','closed']
         && request.resource.data.at is int;
-      allow delete: if false;
+      allow delete: if request.auth != null && resource.data.owner == request.auth.uid;
     }
   }
 }

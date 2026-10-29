@@ -21,6 +21,11 @@
 - 主辦人身分靠 Firebase 匿名登入辨識,所以要用**建立比賽的同一個瀏覽器**操作控制按鈕。
 - 需要在 Firebase 控制台開啟匿名登入:Authentication → 開始使用 → Sign-in method → Anonymous → 啟用。沒開的話,比賽仍可用「掃碼就開始」。
 
+## 清理舊資料
+- 新成績和比賽狀態都帶 `expireAt`(30 天後)。在 Firebase 建立 TTL 政策後,過期資料會自動刪除:Firestore Database → 上方「TTL」分頁 → 建立政策,集合群組 ID 填 `scores`,時間戳記欄位填 `expireAt`;再建立第二個,集合群組 ID 填 `ctl`,欄位同樣是 `expireAt`。
+- 想提早清掉:建立比賽的那個瀏覽器,在分享畫面按「🗑 刪除這場比賽」(按兩次確認),會刪掉該場所有成績和狀態。
+- 沒有 `expireAt` 的舊資料不會自動過期,請到 Firebase 控制台手動刪除。
+
 ## 部署
 GitHub 儲存庫 Settings → Pages → 從 `main` 分支根目錄發布,網址是
 `https://<帳號>.github.io/<儲存庫>/quiz-fire/`
