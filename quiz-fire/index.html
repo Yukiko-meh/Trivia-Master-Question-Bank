@@ -90,6 +90,22 @@ button,input{font:inherit;color:inherit}
 .row .nm{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:1.15rem}
 .row .sc{font-size:1.3rem;font-variant-numeric:tabular-nums}
 .row .tm{color:var(--muted);font-size:.85rem;width:54px;text-align:right;font-variant-numeric:tabular-nums}
+
+/* 前三名獎盃動畫 */
+.trophy{display:inline-block;font-size:1.9rem;line-height:1;transform-origin:50% 90%;animation:tw 2.2s ease-in-out infinite;filter:drop-shadow(0 2px 3px rgba(0,0,0,.18))}
+.row.t1 .trophy{font-size:2.3rem;animation:tw 1.6s ease-in-out infinite,glow 1.6s ease-in-out infinite}
+.row.t2 .trophy{animation-delay:.3s}.row.t3 .trophy{animation-delay:.6s}
+@keyframes tw{0%,100%{transform:rotate(-8deg) scale(1)}50%{transform:rotate(8deg) scale(1.12)}}
+@keyframes glow{0%,100%{filter:drop-shadow(0 0 0 rgba(255,200,0,0))}50%{filter:drop-shadow(0 0 9px rgba(255,190,0,.95))}}
+.row.t1,.row.t2,.row.t3{border-radius:14px;border-top-color:transparent;animation:pop .6s cubic-bezier(.2,1.4,.4,1) both}
+.row.t1{background:linear-gradient(90deg,#FFF3B8,#FFE066);font-weight:700}
+.row.t2{background:linear-gradient(90deg,#F1F3F6,#D9DEE6)}
+.row.t3{background:linear-gradient(90deg,#FFE6D2,#F0BE98)}
+.row.t2{animation-delay:.12s}.row.t3{animation-delay:.24s}
+@keyframes pop{0%{opacity:0;transform:translateY(14px) scale(.94)}100%{opacity:1;transform:none}}
+.cheer{text-align:center;font-size:1.3rem;margin:8px 0;animation:pop .7s both}
+#confetti{position:fixed;inset:0;width:100%;height:100%;pointer-events:none;z-index:50}
+@media (prefers-reduced-motion:reduce){.trophy,.row.t1,.row.t2,.row.t3,.cheer{animation:none!important}}
 .qr{display:grid;place-items:center;background:#fff;border-radius:16px;padding:12px;width:fit-content;margin:0 auto}
 .qr svg,.qr img{display:block;width:min(60vw,240px);height:auto}
 .link{word-break:break-all;background:var(--chip);border-radius:12px;padding:8px 12px;font-size:.9rem}
@@ -441,12 +457,37 @@ $("#pl-next").onclick = async () => {
 };
 
 /* ---------- 排行榜 ---------- */
+const TROPHY = ["", "🏆", "🥈", "🥉"];
 function rows(list, me) {
   if (!list.length) return '<p class="sub" style="text-align:center;padding:12px">還沒有人完成作答</p>';
   return list.map((r) => {
-    const m = r.rank <= 3 ? `<span class="medal m${r.rank}">${r.rank}</span>` : r.rank;
-    return `<div class="row${r.name === me ? " mine" : ""}"><span class="rk">${m}</span><span class="nm">${esc(r.name)}</span><span class="sc">${r.score}</span><span class="tm">${fmt(r.ms)}</span></div>`;
+    const top = r.rank <= 3;
+    const m = top ? `<span class="trophy" title="第 ${r.rank} 名">${TROPHY[r.rank]}</span>` : r.rank;
+    return `<div class="row${top ? " t" + r.rank : ""}${r.name === me ? " mine" : ""}"><span class="rk">${m}</span><span class="nm">${esc(r.name)}</span><span class="sc">${r.score}</span><span class="tm">${fmt(r.ms)}</span></div>`;
   }).join("");
+}
+// 彩帶:用一張畫布放幾秒就移除;使用者設定「減少動態效果」時不放。
+function confetti(ms = 3200) {
+  if (matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+  try {
+    document.getElementById("confetti")?.remove();
+    const c = document.createElement("canvas"); c.id = "confetti";
+    c.width = innerWidth; c.height = innerHeight; document.body.appendChild(c);
+    const g = c.getContext("2d"), cols = ["#FFC400", "#FF6B8B", "#4DB6FF", "#6BD66B", "#B388FF", "#FF9A3C"];
+    const ps = Array.from({ length: 110 }, () => ({
+      x: c.width / 2 + (Math.random() - .5) * c.width * .3, y: c.height * .35,
+      vx: (Math.random() - .5) * 13, vy: -Math.random() * 13 - 3,
+      w: 6 + Math.random() * 6, h: 8 + Math.random() * 8, r: Math.random() * 6, vr: (Math.random() - .5) * .4,
+      c: cols[(Math.random() * cols.length) | 0],
+    }));
+    const t0 = performance.now();
+    (function tick(t) {
+      const k = t - t0; g.clearRect(0, 0, c.width, c.height);
+      g.globalAlpha = Math.max(0, Math.min(1, (ms - k) / 700));
+      for (const p of ps) { p.vy += .32; p.vx *= .99; p.x += p.vx; p.y += p.vy; p.r += p.vr; g.save(); g.translate(p.x, p.y); g.rotate(p.r); g.fillStyle = p.c; g.fillRect(-p.w / 2, -p.h / 2, p.w, p.h); g.restore(); }
+      if (k < ms) requestAnimationFrame(tick); else c.remove();
+    })(t0);
+  } catch {}
 }
 // 即時監聽排行榜:只有成績有變動時才讀變動的那幾筆,不會每隔幾秒就重讀整份(免費額度每天只有 5 萬次讀取)。
 async function watchBoard(r, lim, cb, onErr) {
@@ -479,7 +520,14 @@ async function endView(r, d) {
     const mine = list.find((x) => x.name === d.name);
     $("#me-r").textContent = mine ? `目前第 ${mine.rank} 名` + (total ? `(共 ${total} 人)` : "") : (list.length >= 50 ? "目前在前 50 名之外" : "");
     $("#end-board").innerHTML = rows(list, d.name);
+    const rk = mine ? mine.rank : 99;
+    if (rk <= 3 && rk !== celebrated) { celebrated = rk; confetti(); }
+    if (rk > 3) celebrated = 0;
+    let ch = $("#me-cheer");
+    if (!ch) { ch = document.createElement("div"); ch.id = "me-cheer"; ch.className = "cheer"; $("#me-r").after(ch); }
+    ch.textContent = rk <= 3 ? `${TROPHY[rk]} 恭喜你進入前三名!` : "";
   };
+  let celebrated = 0;
   let last = [];
   try {
     const un = await watchBoard(r, 50, (list) => { last = list; draw(list); }, () => { $("#end-board").innerHTML = boardErr; });
@@ -497,11 +545,15 @@ async function boardView(r) {
   const head = (n) => `${gnames(info.grades)} · ${sname(info.subj)} · ${info.n} 題` + (n == null ? ` · 代碼 ${r.split("-").pop().toUpperCase()}` : ` · 已完成 ${n} 人`);
   $("#bd-s").textContent = head(null);
   show("board");
-  let total = 0, shown = 0, cst = null;
+  let total = 0, shown = 0, cst = null, champ;
   const hd = () => { $("#bd-s").textContent = head(Math.max(total, shown)) + (cst === "waiting" ? " · 等待開始" : cst === "closed" ? " · 已結束" : ""); };
   watchCtl(r, (c) => { cst = c && c.status; hd(); }).then((un) => stops.push(un)).catch(() => {});
   try {
-    const un = await watchBoard(r, 20, (list) => { $("#bd-list").innerHTML = rows(list, null); shown = list.length; hd(); }, () => { $("#bd-list").innerHTML = boardErr; });
+    const un = await watchBoard(r, 20, (list) => {
+      $("#bd-list").innerHTML = rows(list, null); shown = list.length; hd();
+      const top = list[0] ? list[0].name : null;
+      if (top && top !== champ) { if (champ !== undefined) confetti(); champ = top; }
+    }, () => { $("#bd-list").innerHTML = boardErr; });
     stops.push(un);
     const upd = async () => { const c = await countBoard(r); if (c != null) { total = c; hd(); } };
     upd(); const t = setInterval(upd, 15000); stops.push(() => clearInterval(t));
