@@ -603,7 +603,7 @@ function slidesView(r) {
   if (!info) { show("create"); fail("這個比賽連結不正確。"); return; }
   stopAll();
   document.querySelector(".app").classList.add("wide");
-  const qs = pickQuestions(r), n = qs.length;
+  const qs = pickQuestions(r).map((q) => ({ ...q, options: shuffle(q.options) })), n = qs.length; // 每次開啟投影頁,選項順序隨機;同一次內來回翻頁維持不變
   // step 0..n-1 = 各題;n = 出完了;n+1 = 公布答案
   let step = 0, timer = null;
   $("#sl-s").textContent = `${gnames(info.grades)} · ${sname(info.subj)} · 共 ${n} 題`;
