@@ -106,6 +106,25 @@ button,input{font:inherit;color:inherit}
 .cheer{text-align:center;font-size:1.3rem;margin:8px 0;animation:pop .7s both}
 #confetti{position:fixed;inset:0;width:100%;height:100%;pointer-events:none;z-index:50}
 @media (prefers-reduced-motion:reduce){.trophy,.row.t1,.row.t2,.row.t3,.cheer{animation:none!important}}
+
+/* 出題投影 */
+.sl{display:flex;flex-direction:column;gap:12px;min-height:92vh}
+.sl .q{font-size:clamp(1.8rem,5.2vw,3.4rem);line-height:1.35;text-align:center;font-weight:700;margin:6px 0}
+.sl .opts{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.sl .o{background:var(--chip);border-radius:18px;padding:16px 14px;font-size:clamp(1.2rem,3.4vw,2.2rem);text-align:center;animation:pop .5s both}
+.sl .o:nth-child(2){animation-delay:.1s}.sl .o:nth-child(3){animation-delay:.2s}.sl .o:nth-child(4){animation-delay:.3s}
+.sl .bar{height:10px;background:var(--line);border-radius:6px;overflow:hidden}
+.sl .bar i{display:block;height:100%;background:var(--accent);transition:width .3s}
+.sl .nav{display:flex;gap:10px;align-items:center;justify-content:center;flex-wrap:wrap;margin-top:auto}
+.sl .nav .btn{width:auto;min-width:120px}
+.sl .tag{text-align:center;color:var(--muted);font-size:1.1rem}
+.sl .big{font-size:2.6rem;text-align:center;margin:24px 0}
+.ans{display:flex;gap:10px;align-items:flex-start;padding:10px 4px;border-top:2px dashed var(--line);animation:pop .5s both}
+.ans:first-child{border-top:0}
+.ans .no{flex:none;width:2.2rem;text-align:center;color:var(--muted);font-variant-numeric:tabular-nums}
+.ans .qq{flex:1;min-width:0}
+.ans .aa{display:block;color:var(--accent);font-weight:700;margin-top:2px}
+@media (max-width:560px){.sl .opts{grid-template-columns:1fr}}
 .qr{display:grid;place-items:center;background:#fff;border-radius:16px;padding:12px;width:fit-content;margin:0 auto}
 .qr svg,.qr img{display:block;width:min(60vw,240px);height:auto}
 .link{word-break:break-all;background:var(--chip);border-radius:12px;padding:8px 12px;font-size:.9rem}
@@ -163,6 +182,7 @@ button,input{font:inherit;color:inherit}
     </div>
     <p class="sub" id="sh-ctlnote" style="text-align:center" hidden></p>
     <a class="btn big" id="sh-board" style="text-align:center;text-decoration:none;display:block;line-height:38px">開啟大螢幕排行榜</a>
+    <a class="btn big ghost" id="sh-slides" style="text-align:center;text-decoration:none;display:block;line-height:38px">📽 開啟出題投影(最後公布答案)</a>
     <button class="btn big ghost" id="sh-play">我也要玩</button>
     <button class="btn big ghost" id="sh-new">🔀 換一組題目</button>
     <p class="sub" id="sh-newn" style="text-align:center" hidden></p>
@@ -211,6 +231,20 @@ button,input{font:inherit;color:inherit}
       <div class="qr" id="bd-qr"></div><p class="sub">還沒作答的人,掃這個 QR 碼加入</p>
     </div>
     <div class="card"><div class="board" id="bd-list"></div></div>
+  </section>
+
+  <!-- 7. 出題投影 -->
+  <section id="v-slides" class="sl" hidden>
+    <div class="tag" id="sl-s"></div>
+    <div class="bar"><i id="sl-bar"></i></div>
+    <div id="sl-body"></div>
+    <div class="nav">
+      <button class="btn ghost" id="sl-prev">◀ 上一題</button>
+      <button class="btn" id="sl-next">下一題 ▶</button>
+      <label class="sub" style="display:flex;align-items:center;gap:6px"><input type="checkbox" id="sl-auto"> 自動換題</label>
+      <select id="sl-sec" aria-label="自動換題秒數"><option value="10">10 秒</option><option value="15" selected>15 秒</option><option value="20">20 秒</option><option value="30">30 秒</option></select>
+    </div>
+    <p class="sub" style="text-align:center">方向鍵 ← → 或空白鍵可以換題;最後會一次公布全部答案。</p>
   </section>
 
   <p class="err" id="err" hidden></p>
@@ -383,6 +417,8 @@ function shareView(r, create) {
   $("#sh-link").textContent = url;
   $("#sh-board").href = `${base}?r=${r}&view=board`;
   $("#sh-board").target = "_blank";
+  $("#sh-slides").href = `${base}?r=${r}&view=slides`;
+  $("#sh-slides").target = "_blank";
   $("#sh-new").onclick = () => {
     const nr = newRoom(info.grades.join(""), info.n, info.subj);
     history.replaceState(null, "", `?host=1&r=${nr}`); shareView(nr, hostWait);
@@ -560,9 +596,50 @@ async function boardView(r) {
   } catch { $("#bd-list").innerHTML = boardErr; }
 }
 
+
+/* ---------- 出題投影:一題一題秀,全部秀完才一起公布答案 ---------- */
+function slidesView(r) {
+  const info = parseRoom(r);
+  if (!info) { show("create"); fail("這個比賽連結不正確。"); return; }
+  stopAll();
+  document.querySelector(".app").classList.add("wide");
+  const qs = pickQuestions(r), n = qs.length;
+  // step 0..n-1 = 各題;n = 出完了;n+1 = 公布答案
+  let step = 0, timer = null;
+  $("#sl-s").textContent = `${gnames(info.grades)} · ${sname(info.subj)} · 共 ${n} 題`;
+  const render = () => {
+    const b = $("#sl-body"); $("#sl-bar").style.width = Math.min(step, n) / n * 100 + "%";
+    $("#sl-prev").disabled = step === 0;
+    const nx = $("#sl-next");
+    if (step < n) {
+      const q = qs[step];
+      b.innerHTML = `<div class="tag">第 ${step + 1} / ${n} 題</div><div class="q">${esc(q.q)}</div><div class="opts">${q.options.map((t) => `<div class="o">${esc(t)}</div>`).join("")}</div>`;
+      nx.textContent = step === n - 1 ? "出完了 ▶" : "下一題 ▶"; nx.hidden = false;
+    } else if (step === n) {
+      b.innerHTML = `<div class="big">🎉 題目都出完了!</div><div class="tag">還在作答的同學請加油,準備好就公布答案</div>`;
+      nx.textContent = "🎉 公布答案"; nx.hidden = false;
+    } else {
+      b.innerHTML = `<div class="hero"><h1>答案公布</h1><p>共 ${n} 題</p></div><div class="card">${qs.map((q, i) => `<div class="ans" style="animation-delay:${Math.min(i, 20) * .08}s"><span class="no">${i + 1}</span><span class="qq">${esc(q.q)}<span class="aa">✅ ${esc(q.correct)}</span></span></div>`).join("")}</div>`;
+      nx.hidden = true; confetti(2600);
+    }
+    window.scrollTo(0, 0); arm();
+  };
+  const go = (d) => { step = Math.max(0, Math.min(n + 1, step + d)); render(); };
+  const arm = () => {
+    clearTimeout(timer);
+    if ($("#sl-auto").checked && step < n) timer = setTimeout(() => go(1), +$("#sl-sec").value * 1000); // 自動只換題,不會自己公布答案
+  };
+  $("#sl-prev").onclick = () => go(-1); $("#sl-next").onclick = () => go(1);
+  $("#sl-auto").onchange = arm; $("#sl-sec").onchange = arm;
+  const key = (e) => { if (e.target.tagName === "SELECT" || e.target.tagName === "INPUT") return; if (e.key === "ArrowRight" || e.key === " ") { e.preventDefault(); go(1); } else if (e.key === "ArrowLeft") go(-1); };
+  document.addEventListener("keydown", key); stops.push(() => { document.removeEventListener("keydown", key); clearTimeout(timer); });
+  show("slides"); render();
+}
+
 /* ---------- 路由 ---------- */
 if (!room) { drawCreate(); show("create"); }
 else if (params.get("view") === "board") boardView(room);
+else if (params.get("view") === "slides") slidesView(room);
 else if (params.get("host") === "1") shareView(room);
 else joinView(room);
 </script>
