@@ -101,6 +101,12 @@ h1{margin:0;font-size:1.7rem;line-height:1.15;text-wrap:balance}
 .team:nth-child(1){border-color:var(--pink)}.team:nth-child(2){border-color:var(--grape)}.team:nth-child(3){border-color:var(--mint)}.team:nth-child(4){border-color:var(--sun)}
 .stage .nav{display:flex;gap:8px;justify-content:center;flex-wrap:wrap}
 .stage .nav .btn{flex:1 1 90px;max-width:200px}
+.final-title{margin:0;text-align:center;font-size:clamp(1.6rem,5vw,2.6rem)}
+.final-list{list-style:none;margin:0;padding:0;display:grid;gap:10px;grid-template-columns:1fr}
+@media(min-width:760px){.final-list{grid-template-columns:1fr 1fr}}
+.final-list li{display:flex;gap:10px;align-items:center;background:var(--card);border:2px solid var(--line);border-radius:16px;padding:10px 12px;min-width:0}
+.final-list .ft{flex:1;min-width:0;overflow-wrap:anywhere;font-size:clamp(.95rem,2.6vw,1.3rem)}
+.final-list .fa{flex:none;max-width:45%;background:var(--ok-bg);border:2px solid var(--ok);border-radius:12px;padding:4px 10px;font-size:clamp(1rem,2.8vw,1.4rem);overflow-wrap:anywhere}
 .pop{animation:pop .4s}
 @keyframes pop{0%{transform:scale(.9)}60%{transform:scale(1.04)}100%{transform:scale(1)}}
 .foot{text-align:center;color:var(--muted);font-size:.85rem}
@@ -149,6 +155,11 @@ h1{margin:0;font-size:1.7rem;line-height:1.15;text-wrap:balance}
     <div class="card">
       <h2><span class="step">4</span>上台模式要分幾隊計分?</h2>
       <div class="chips" id="teamsel"></div>
+    </div>
+    <div class="card">
+      <h2><span class="step">5</span>上台模式怎麼公布答案?</h2>
+      <div class="chips" id="ansmode"></div>
+      <p class="hint">「最後一起公布」:題目全部播完,再一次看所有答案。</p>
     </div>
   </section>
 
@@ -306,9 +317,9 @@ const GL=['','小一','小二','小三','小四','小五','小六','國一','國
 const SUBJ=[['國語','📖','國語文'],['數學','🔢','數學'],['自然','🔬','自然'],['社會','🌏','社會'],['英語','🔤','英語'],['趣味','🎈','趣味常識']];
 const LET='ABCD';
 const $=id=>document.getElementById(id);
-const st={grades:new Set([3]),subs:new Set(['國語','數學','自然']),n:10,teams:2,qs:[],showAns:false};
-try{const s=JSON.parse(localStorage.getItem('qbox')||'null');if(s){st.grades=new Set(s.grades);st.subs=new Set(s.subs);st.n=s.n;st.teams=s.teams}}catch(e){}
-const save=()=>{try{localStorage.setItem('qbox',JSON.stringify({grades:[...st.grades],subs:[...st.subs],n:st.n,teams:st.teams}))}catch(e){}};
+const st={grades:new Set([3]),subs:new Set(['國語','數學','自然']),n:10,teams:2,ansLater:true,qs:[],showAns:false};
+try{const s=JSON.parse(localStorage.getItem('qbox')||'null');if(s){st.grades=new Set(s.grades);st.subs=new Set(s.subs);st.n=s.n;st.teams=s.teams;if(typeof s.ansLater==='boolean')st.ansLater=s.ansLater}}catch(e){}
+const save=()=>{try{localStorage.setItem('qbox',JSON.stringify({grades:[...st.grades],subs:[...st.subs],n:st.n,teams:st.teams,ansLater:st.ansLater}))}catch(e){}};
 function toast(t){const e=$('toast');e.textContent=t;e.classList.add('on');clearTimeout(toast.t);toast.t=setTimeout(()=>e.classList.remove('on'),1800)}
 
 // 題庫轉成題目物件
@@ -362,6 +373,7 @@ function renderSetup(){
   chips($('subjects'),SUBJ.map(s=>({v:s[0],label:s[1]+' '+s[2]})),v=>st.subs.has(v),v=>tog(st.subs,v),'sub-on');
   chips($('quickn'),[5,10,15,20,30].map(v=>({v,label:v+'題'})),v=>st.n===v,v=>{st.n=v});
   chips($('teamsel'),[0,2,3,4].map(v=>({v,label:v?v+' 隊':'不計分'})),v=>st.teams===v,v=>{st.teams=v});
+  chips($('ansmode'),[{v:true,label:'最後一起公布'},{v:false,label:'每題公布'}],v=>st.ansLater===v,v=>{st.ansLater=v});
   $('n').textContent=st.n;
   const bank=bankPool([...st.grades],[...st.subs]).length,m=st.subs.has('數學');
   let h=!st.grades.size?'請先選年級':!st.subs.size?'請先選科目':
@@ -415,12 +427,28 @@ $('copy').onclick=async()=>{
 };
 
 // ===== 上台模式 =====
-const S={i:0,rev:false,sec:20,left:0,tm:null,score:[0,0,0,0]};
+const S={i:0,rev:false,final:false,sec:20,left:0,tm:null,score:[0,0,0,0]};
 const TN=['紅隊','藍隊','綠隊','黃隊'],SECS=[10,20,30,60];
 function stopTimer(){clearInterval(S.tm);S.tm=null;$('timer').classList.remove('low')}
 function setTimer(){$('timer').textContent=S.tm?S.left:S.sec}
+function renderFinal(){
+  stopTimer();$('timer').hidden=true;
+  $('st-pos').textContent='答案';$('st-fill').style.width='100%';
+  const b=$('st-q');b.classList.remove('show-ans');
+  b.innerHTML='<h2 class="final-title">🎉 答案公布</h2><ol class="final-list"></ol>';
+  const ol=b.querySelector('.final-list');
+  st.qs.forEach((q,i)=>{const li=document.createElement('li');
+    li.innerHTML='<span class="num"></span><span class="ft"></span><span class="fa"></span>';
+    li.children[0].textContent=i+1;li.children[1].textContent=q.q;
+    li.children[2].textContent=LET[q.opts.indexOf(q.correct)]+'. '+q.correct;ol.appendChild(li)});
+  $('st-ans').hidden=true;$('st-time').hidden=true;
+  $('st-prev').disabled=false;$('st-prev').textContent='← 回最後一題';
+  $('st-next').disabled=true;$('st-next').textContent='全部公布完囉';
+}
 function renderStage(){
+  if(S.final){renderFinal();return}
   const q=st.qs[S.i];if(!q)return;
+  $('timer').hidden=false;$('st-time').hidden=false;
   stopTimer();setTimer();
   $('st-pos').textContent=`${S.i+1} / ${st.qs.length}`;
   $('st-fill').style.width=((S.i+1)/st.qs.length*100)+'%';
@@ -430,8 +458,11 @@ function renderStage(){
   const ul=b.querySelector('.opts');
   q.opts.forEach((o,k)=>{const li=document.createElement('li');li.className='opt'+(o===q.correct?' right':'');
     li.innerHTML=`<b>${LET[k]}</b><span></span>`;li.querySelector('span').textContent=o;ul.appendChild(li)});
-  $('st-ans').textContent=S.rev?'藏答案':'看答案';
-  $('st-prev').disabled=S.i===0;$('st-next').disabled=S.i===st.qs.length-1;
+  $('st-ans').hidden=st.ansLater;$('st-ans').textContent=S.rev?'藏答案':'看答案';
+  const last=S.i===st.qs.length-1;
+  $('st-prev').disabled=S.i===0;$('st-prev').textContent='← 上一題';
+  $('st-next').disabled=last&&!st.ansLater;
+  $('st-next').textContent=last&&st.ansLater?'公布答案 🎉':'下一題 →';
 }
 function renderTeams(){
   const t=$('teams');t.innerHTML='';t.hidden=!st.teams;
@@ -444,9 +475,10 @@ function renderTeams(){
 }
 function go(d){const n=S.i+d;if(n<0||n>=st.qs.length)return;S.i=n;S.rev=false;renderStage()}
 $('play').onclick=()=>{if(!st.qs.length){toast('先出題喔');return}
-  S.i=0;S.rev=false;S.score=[0,0,0,0];$('stage').hidden=false;document.body.style.overflow='hidden';renderStage();renderTeams()};
+  S.i=0;S.rev=false;S.final=false;S.score=[0,0,0,0];$('stage').hidden=false;document.body.style.overflow='hidden';renderStage();renderTeams()};
 $('st-close').onclick=()=>{stopTimer();$('stage').hidden=true;document.body.style.overflow=''};
-$('st-prev').onclick=()=>go(-1);$('st-next').onclick=()=>go(1);
+$('st-prev').onclick=()=>{if(S.final){S.final=false;S.rev=false;renderStage();return}go(-1)};
+$('st-next').onclick=()=>{if(st.ansLater&&S.i===st.qs.length-1){S.final=true;renderStage();return}go(1)};
 $('st-ans').onclick=()=>{S.rev=!S.rev;$('st-q').classList.toggle('show-ans',S.rev);$('st-ans').textContent=S.rev?'藏答案':'看答案'};
 $('timer').onclick=()=>{if(S.tm)return;S.sec=SECS[(SECS.indexOf(S.sec)+1)%SECS.length];setTimer()};
 $('st-time').onclick=()=>{
@@ -458,8 +490,8 @@ $('st-time').onclick=()=>{
 };
 document.addEventListener('keydown',e=>{
   if($('stage').hidden)return;
-  if(e.key==='ArrowRight')go(1);else if(e.key==='ArrowLeft')go(-1);
-  else if(e.key===' '){e.preventDefault();$('st-ans').click()}else if(e.key==='Escape')$('st-close').click();
+  if(e.key==='ArrowRight')$('st-next').click();else if(e.key==='ArrowLeft')$('st-prev').click();
+  else if(e.key===' '){e.preventDefault();(st.ansLater?$('st-next'):$('st-ans')).click()}else if(e.key==='Escape')$('st-close').click();
 });
 
 renderSetup();
