@@ -112,7 +112,6 @@ button,input{font:inherit;color:inherit}
 .sl .q{font-size:clamp(1.8rem,5.2vw,3.4rem);line-height:1.35;text-align:center;font-weight:700;margin:6px 0}
 .sl .opts{display:grid;grid-template-columns:1fr 1fr;gap:12px}
 .sl .o{background:var(--chip);border-radius:18px;padding:16px 14px;font-size:clamp(1.2rem,3.4vw,2.2rem);text-align:center;animation:pop .5s both}
-.sl .o .ch{display:inline-grid;place-items:center;width:1.7em;height:1.7em;border-radius:50%;background:var(--accent);color:#fff;font-weight:700;margin-right:.5em;font-size:.85em}
 .sl .o:nth-child(2){animation-delay:.1s}.sl .o:nth-child(3){animation-delay:.2s}.sl .o:nth-child(4){animation-delay:.3s}
 .sl .bar{height:10px;background:var(--line);border-radius:6px;overflow:hidden}
 .sl .bar i{display:block;height:100%;background:var(--accent);transition:width .3s}
@@ -455,7 +454,7 @@ function joinView(r) {
 
 let S;
 function play(r, name) {
-  const qs = pickQuestions(r); // 題目與選項順序由代碼決定,所有人與大螢幕一致
+  const qs = shuffle(pickQuestions(r)).map((q) => ({ ...q, options: shuffle(q.options) }));
   S = { r, name, qs, i: 0, ms: 0, t0: 0, ans: [], right: 0, locked: false };
   $("#pl-g").textContent = gnames(parseRoom(r).grades);
   show("play"); showQ();
@@ -614,13 +613,13 @@ function slidesView(r) {
     const nx = $("#sl-next");
     if (step < n) {
       const q = qs[step];
-      b.innerHTML = `<div class="tag">第 ${step + 1} / ${n} 題</div><div class="q">${esc(q.q)}</div><div class="opts">${q.options.map((t, k) => `<div class="o"><span class="ch">${LT[k]}</span>${esc(t)}</div>`).join("")}</div>`;
+      b.innerHTML = `<div class="tag">第 ${step + 1} / ${n} 題</div><div class="q">${esc(q.q)}</div><div class="opts">${q.options.map((t) => `<div class="o">${esc(t)}</div>`).join("")}</div>`;
       nx.textContent = step === n - 1 ? "出完了 ▶" : "下一題 ▶"; nx.hidden = false;
     } else if (step === n) {
       b.innerHTML = `<div class="big">🎉 題目都出完了!</div><div class="tag">還在作答的同學請加油,準備好就公布答案</div>`;
       nx.textContent = "🎉 公布答案"; nx.hidden = false;
     } else {
-      b.innerHTML = `<div class="hero"><h1>答案公布</h1><p>共 ${n} 題</p></div><div class="card">${qs.map((q, i) => `<div class="ans" style="animation-delay:${Math.min(i, 20) * .08}s"><span class="no">${i + 1}</span><span class="qq">${esc(q.q)}<span class="aa">✅ ${LT[q.options.indexOf(q.correct)]}. ${esc(q.correct)}</span></span></div>`).join("")}</div>`;
+      b.innerHTML = `<div class="hero"><h1>答案公布</h1><p>共 ${n} 題</p></div><div class="card">${qs.map((q, i) => `<div class="ans" style="animation-delay:${Math.min(i, 20) * .08}s"><span class="no">${i + 1}</span><span class="qq">${esc(q.q)}<span class="aa">✅ ${esc(q.correct)}</span></span></div>`).join("")}</div>`;
       nx.hidden = true; confetti(2600);
     }
     window.scrollTo(0, 0); arm();
