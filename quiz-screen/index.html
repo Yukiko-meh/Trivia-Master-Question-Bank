@@ -1,0 +1,224 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>小小知識王・出題大螢幕</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Huninn&display=swap">
+<style>
+
+/* 版面:手機單欄。一個網址、四個畫面:建立比賽 / 輸入暱稱 / 作答 / 排行榜。 */
+:root{
+  --bg:#EEF2FF; --card:#FFFFFF; --fg:#2B2A4C; --muted:#66658C; --line:#D9DEF7; --edge:#C9D0F2;
+  --accent:#FF6B8B; --accent-dk:#D94A6B; --sun:#FFC93C; --mint:#2FBF8F; --bad:#F0566B;
+  --ok-bg:#DDF7EC; --bad-bg:#FFE1E6; --chip:#EEF2FF; --gold:#FFC93C; --silver:#C4CBE0; --bronze:#E3A375;
+  --f:'Huninn','PingFang TC','Noto Sans TC','Microsoft JhengHei',system-ui,sans-serif;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#171A33; --card:#232748; --fg:#F1F0FF; --muted:#AAA9D2; --line:#353A63; --edge:#0F1126;
+  --accent:#FF7C98; --accent-dk:#C84766; --ok-bg:#15392F; --bad-bg:#43202F; --chip:#2F3460; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#171A33; --card:#232748; --fg:#F1F0FF; --muted:#AAA9D2; --line:#353A63; --edge:#0F1126;
+  --accent:#FF7C98; --accent-dk:#C84766; --ok-bg:#15392F; --bad-bg:#43202F; --chip:#2F3460; color-scheme:dark}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+body{margin:0;background:var(--bg);color:var(--fg);font-family:var(--f);font-size:16px;line-height:1.5;
+  padding-block:16px 32px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+.app{max-width:560px;margin:0 auto}
+section{display:flex;flex-direction:column;gap:16px}
+h1,h2{font-weight:400;margin:0}
+p{margin:0}
+button,input{font:inherit;color:inherit}
+:focus-visible{outline:3px solid var(--sun);outline-offset:2px}
+.card{background:var(--card);border-radius:22px;padding:16px;box-shadow:0 4px 0 var(--edge);min-width:0}
+.card h2{font-size:1.2rem;margin-bottom:10px}
+.sub{color:var(--muted);font-size:.9rem}
+.lbl{font-size:.85rem;color:var(--muted);margin:12px 0 6px;letter-spacing:.05em}
+.btn{min-height:52px;padding:10px 18px;border:0;border-radius:16px;cursor:pointer;background:var(--accent);color:#fff;
+  font-size:1.15rem;box-shadow:0 4px 0 var(--accent-dk);transition:transform .08s,box-shadow .08s}
+.btn:active{transform:translateY(3px);box-shadow:0 1px 0 var(--accent-dk)}
+.btn:disabled{opacity:.6}
+.btn.ghost{background:var(--card);color:var(--fg);border:2px solid var(--line);box-shadow:0 4px 0 var(--edge)}
+.btn.big{width:100%;min-height:58px;font-size:1.3rem}
+.btn.sm{min-height:44px;padding:6px 14px;font-size:1rem}
+.hero{text-align:center;padding-top:8px}
+.hero h1{font-size:2.4rem;color:var(--accent);letter-spacing:.06em;line-height:1.2}
+.hero p{color:var(--muted);margin-top:4px}
+.grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+.seg2{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.grid4{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
+.stp{display:flex;align-items:center;gap:10px}
+.stp i{font-style:normal;display:inline-grid;place-items:center;width:34px;height:34px;border-radius:50%;background:var(--sun);color:#3B2F00;font-size:1rem;flex:none}
+.chips{display:flex;flex-wrap:wrap;gap:10px}
+.chip{min-height:52px;padding:6px 18px;border-radius:99px;border:2px solid var(--line);background:var(--chip);cursor:pointer;font-size:1.1rem;box-shadow:0 3px 0 var(--edge);display:inline-flex;align-items:center;gap:8px}
+.chip:active{transform:translateY(2px);box-shadow:0 1px 0 var(--edge)}
+.chip.on{background:var(--accent);border-color:var(--accent);color:#fff;box-shadow:0 3px 0 var(--accent-dk)}
+.pick:disabled{opacity:.4;cursor:not-allowed}
+.pick{min-height:52px;border-radius:16px;border:2px solid var(--line);background:var(--chip);cursor:pointer;font-size:1.1rem;box-shadow:0 3px 0 var(--edge)}
+.pick:active{transform:translateY(2px);box-shadow:0 1px 0 var(--edge)}
+.pick.on{background:var(--accent);border-color:var(--accent);color:#fff;box-shadow:0 3px 0 var(--accent-dk)}
+.name{width:100%;min-height:56px;padding:6px 14px;border-radius:16px;border:2px solid var(--line);background:var(--bg);font-size:1.3rem;text-align:center}
+.top{display:flex;align-items:center;gap:10px}
+.grow{flex:1;min-width:0}
+.pill{background:var(--sun);color:#3B2F00;border-radius:99px;padding:2px 12px}
+.track{height:10px;border-radius:99px;background:var(--line);overflow:hidden;margin-top:8px}
+.track i{display:block;height:100%;width:0;background:var(--mint);border-radius:99px;transition:width .3s}
+.q{font-size:1.4rem;line-height:1.5;text-wrap:balance}
+.opts{display:flex;flex-direction:column;gap:12px}
+.opt{display:flex;align-items:center;gap:12px;width:100%;min-height:58px;padding:10px 14px;text-align:left;cursor:pointer;
+  border-radius:18px;border:3px solid var(--line);background:var(--card);font-size:1.1rem;box-shadow:0 4px 0 var(--edge)}
+.opt:active:not(.lock){transform:translateY(3px);box-shadow:0 1px 0 var(--edge)}
+.opt .ch{width:34px;height:34px;border-radius:50%;background:var(--chip);display:grid;place-items:center;flex:none}
+.opt .tx{min-width:0;overflow-wrap:anywhere}
+.opt.lock{cursor:default}
+.opt.ok{background:var(--ok-bg);border-color:var(--mint)}
+.opt.bad{background:var(--bad-bg);border-color:var(--bad)}
+.opt.dim{opacity:.55}
+.fb{border-radius:18px;padding:12px 14px;font-size:1.15rem}
+.fb.ok{background:var(--ok-bg);border:2px solid var(--mint)}
+.fb.bad{background:var(--bad-bg);border:2px solid var(--bad)}
+.me{text-align:center}
+.me .big{font-size:3.4rem;line-height:1.1;color:var(--accent)}
+.me .mer{font-size:1.4rem}
+.board{display:flex;flex-direction:column}
+.row{display:flex;align-items:center;gap:12px;padding:10px 4px;border-top:2px dashed var(--line)}
+.row:first-child{border-top:0}
+.row.mine{background:var(--chip);border-radius:14px;border-top-color:transparent}
+.rk{width:44px;text-align:center;flex:none;font-size:1.3rem;font-variant-numeric:tabular-nums}
+.medal{width:36px;height:36px;border-radius:50%;display:grid;place-items:center;color:#3B2F00;margin:0 auto}
+.m1{background:var(--gold)}.m2{background:var(--silver)}.m3{background:var(--bronze)}
+.row .nm{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:1.15rem}
+.row .sc{font-size:1.3rem;font-variant-numeric:tabular-nums}
+.row .tm{color:var(--muted);font-size:.85rem;width:54px;text-align:right;font-variant-numeric:tabular-nums}
+
+
+.app{max-width:900px}
+@keyframes pop{0%{opacity:0;transform:translateY(14px) scale(.94)}100%{opacity:1;transform:none}}
+#confetti{position:fixed;inset:0;width:100%;height:100%;pointer-events:none;z-index:50}
+/* 出題投影 */
+.sl{display:flex;flex-direction:column;gap:12px;min-height:92vh}
+.sl .q{font-size:clamp(1.8rem,5.2vw,3.4rem);line-height:1.35;text-align:center;font-weight:700;margin:6px 0}
+.sl .opts{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.sl .o{background:var(--chip);border-radius:18px;padding:16px 14px;font-size:clamp(1.2rem,3.4vw,2.2rem);text-align:center;animation:pop .5s both}
+.sl .o:nth-child(2){animation-delay:.1s}.sl .o:nth-child(3){animation-delay:.2s}.sl .o:nth-child(4){animation-delay:.3s}
+.sl .bar{height:10px;background:var(--line);border-radius:6px;overflow:hidden}
+.sl .bar i{display:block;height:100%;background:var(--accent);transition:width .3s}
+.sl .nav{display:flex;gap:10px;align-items:center;justify-content:center;flex-wrap:wrap;margin-top:auto}
+.sl .nav .btn{width:auto;min-width:120px}
+.sl .tag{text-align:center;color:var(--muted);font-size:1.1rem}
+.sl .big{font-size:2.6rem;text-align:center;margin:24px 0}
+.ans{display:flex;gap:10px;align-items:flex-start;padding:10px 4px;border-top:2px dashed var(--line);animation:pop .5s both}
+.ans:first-child{border-top:0}
+.ans .no{flex:none;width:2.2rem;text-align:center;color:var(--muted);font-variant-numeric:tabular-nums}
+.ans .qq{flex:1;min-width:0}
+.ans .aa{display:block;color:var(--accent);font-weight:700;margin-top:2px}
+@media (max-width:560px){.sl .opts{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<main class="app">
+  <section id="v-code">
+    <div class="hero"><h1>出題大螢幕</h1><p>把題目一題一題投到大螢幕,最後一次公布答案</p></div>
+    <div class="card">
+      <h2>輸入比賽代碼或連結</h2>
+      <p class="sub" style="margin-bottom:10px">到手機網站建立比賽後,複製「比賽代碼」或整段連結貼在這裡。</p>
+      <input class="name" id="code" placeholder="例如 g3-10-t8c5" autocomplete="off" autocapitalize="off">
+      <button class="btn big" id="code-go" style="margin-top:12px">開始投影</button>
+    </div>
+    <p class="err" id="err" hidden style="color:var(--bad);text-align:center"></p>
+  </section>
+
+  <section id="v-slides" class="sl" hidden>
+    <div class="tag" id="sl-s"></div>
+    <div class="bar"><i id="sl-bar"></i></div>
+    <div id="sl-body"></div>
+    <div class="nav">
+      <button class="btn ghost" id="sl-prev">◀ 上一題</button>
+      <button class="btn" id="sl-next">下一題 ▶</button>
+      <label class="sub" style="display:flex;align-items:center;gap:6px"><input type="checkbox" id="sl-auto"> 自動換題</label>
+      <select id="sl-sec" aria-label="自動換題秒數"><option value="10">10 秒</option><option value="15" selected>15 秒</option><option value="20">20 秒</option><option value="30">30 秒</option></select>
+    </div>
+    <p class="sub" style="text-align:center">方向鍵 ← → 或空白鍵可以換題;最後會一次公布全部答案。</p>
+  </section>
+</main>
+<script type="module">
+import { GR, SUBJECTS, ALL, pickQuestions, parseRoom } from "../quiz-fire/questions.js";
+const $ = (s) => document.querySelector(s);
+const esc = (x) => String(x).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const gname = (g) => (GR.find((x) => x[0] === g) || [, g])[1];
+const gnames = (gs) => (gs.length <= 3 ? gs.map(gname).join("、") : `${gs.length} 個年級`);
+const sname = (s) => (s === ALL ? "全部科目" : SUBJECTS.filter(([c]) => s.includes(c)).map((x) => x[1]).join("、"));
+const shuffle = (a) => { a = a.slice(); for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
+const show = (id) => { document.querySelectorAll("section").forEach((x) => (x.hidden = x.id !== "v-" + id)); window.scrollTo(0, 0); };
+// 彩帶:用一張畫布放幾秒就移除;使用者設定「減少動態效果」時不放。
+function confetti(ms = 3200) {
+  if (matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+  try {
+    document.getElementById("confetti")?.remove();
+    const c = document.createElement("canvas"); c.id = "confetti";
+    c.width = innerWidth; c.height = innerHeight; document.body.appendChild(c);
+    const g = c.getContext("2d"), cols = ["#FFC400", "#FF6B8B", "#4DB6FF", "#6BD66B", "#B388FF", "#FF9A3C"];
+    const ps = Array.from({ length: 110 }, () => ({
+      x: c.width / 2 + (Math.random() - .5) * c.width * .3, y: c.height * .35,
+      vx: (Math.random() - .5) * 13, vy: -Math.random() * 13 - 3,
+      w: 6 + Math.random() * 6, h: 8 + Math.random() * 8, r: Math.random() * 6, vr: (Math.random() - .5) * .4,
+      c: cols[(Math.random() * cols.length) | 0],
+    }));
+    const t0 = performance.now();
+    (function tick(t) {
+      const k = t - t0; g.clearRect(0, 0, c.width, c.height);
+      g.globalAlpha = Math.max(0, Math.min(1, (ms - k) / 700));
+      for (const p of ps) { p.vy += .32; p.vx *= .99; p.x += p.vx; p.y += p.vy; p.r += p.vr; g.save(); g.translate(p.x, p.y); g.rotate(p.r); g.fillStyle = p.c; g.fillRect(-p.w / 2, -p.h / 2, p.w, p.h); g.restore(); }
+      if (k < ms) requestAnimationFrame(tick); else c.remove();
+    })(t0);
+  } catch {}
+}
+
+// 從輸入的代碼或整段連結取出比賽代碼
+const extract = (t) => { t = (t || "").trim(); try { const u = new URL(t); t = u.searchParams.get("r") || t; } catch {} return t.toLowerCase(); };
+const fail = (m) => { const e = $("#err"); e.textContent = m; e.hidden = false; };
+function slidesView(r) {
+  const info = parseRoom(r);
+  if (!info) { show("code"); fail("這個比賽代碼不正確,請再確認。"); return false; }
+  const qs = pickQuestions(r).map((q) => ({ ...q, options: shuffle(q.options) })), n = qs.length; // 每次開啟投影頁,選項順序隨機;同一次內來回翻頁維持不變
+  // step 0..n-1 = 各題;n = 出完了;n+1 = 公布答案
+  let step = 0, timer = null;
+  $("#sl-s").textContent = `${gnames(info.grades)} · ${sname(info.subj)} · 共 ${n} 題`;
+  const render = () => {
+    const b = $("#sl-body"); $("#sl-bar").style.width = Math.min(step, n) / n * 100 + "%";
+    $("#sl-prev").disabled = step === 0;
+    const nx = $("#sl-next");
+    if (step < n) {
+      const q = qs[step];
+      b.innerHTML = `<div class="tag">第 ${step + 1} / ${n} 題</div><div class="q">${esc(q.q)}</div><div class="opts">${q.options.map((t) => `<div class="o">${esc(t)}</div>`).join("")}</div>`;
+      nx.textContent = step === n - 1 ? "出完了 ▶" : "下一題 ▶"; nx.hidden = false;
+    } else if (step === n) {
+      b.innerHTML = `<div class="big">🎉 題目都出完了!</div><div class="tag">還在作答的同學請加油,準備好就公布答案</div>`;
+      nx.textContent = "🎉 公布答案"; nx.hidden = false;
+    } else {
+      b.innerHTML = `<div class="hero"><h1>答案公布</h1><p>共 ${n} 題</p></div><div class="card">${qs.map((q, i) => `<div class="ans" style="animation-delay:${Math.min(i, 20) * .08}s"><span class="no">${i + 1}</span><span class="qq">${esc(q.q)}<span class="aa">✅ ${esc(q.correct)}</span></span></div>`).join("")}</div>`;
+      nx.hidden = true; confetti(2600);
+    }
+    window.scrollTo(0, 0); arm();
+  };
+  const go = (d) => { step = Math.max(0, Math.min(n + 1, step + d)); render(); };
+  const arm = () => {
+    clearTimeout(timer);
+    if ($("#sl-auto").checked && step < n) timer = setTimeout(() => go(1), +$("#sl-sec").value * 1000); // 自動只換題,不會自己公布答案
+  };
+  $("#sl-prev").onclick = () => go(-1); $("#sl-next").onclick = () => go(1);
+  $("#sl-auto").onchange = arm; $("#sl-sec").onchange = arm;
+  const key = (e) => { if (e.target.tagName === "SELECT" || e.target.tagName === "INPUT") return; if (e.key === "ArrowRight" || e.key === " ") { e.preventDefault(); go(1); } else if (e.key === "ArrowLeft") go(-1); };
+  document.addEventListener("keydown", key); 
+  show("slides"); render(); return true;
+}
+
+
+$("#code-go").onclick = () => { const r = extract($("#code").value); if (slidesView(r)) history.replaceState(null, "", `?r=${r}`); };
+$("#code").onkeydown = (e) => { if (e.key === "Enter") $("#code-go").click(); };
+const q0 = new URLSearchParams(location.search).get("r");
+if (q0) { $("#code").value = q0; slidesView(extract(q0)); }
+</script>
+</body>
+</html>
