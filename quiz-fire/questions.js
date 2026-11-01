@@ -599,5 +599,7 @@ export function pickQuestions(room){
   const rand=rng(hash(room)),a=[];
   r.grades.forEach(g=>DB[g].forEach((q,i)=>{if(r.subj.includes(q[5]))a.push([g,i])}));
   for(let i=a.length-1;i>0;i--){const j=Math.floor(rand()*(i+1));[a[i],a[j]]=[a[j],a[i]]}
-  return a.slice(0,r.n).map(([g,i])=>{const q=DB[g][i];return {id:g+":"+i,q:q[0],correct:q[1],options:q.slice(1,5),subj:q[5],grade:g}});
+  // 題目順序與選項順序也用同一個種子洗牌:每個人、大螢幕看到的「第幾題」和 A/B/C/D 都一樣。
+  const r2=rng(hash(room+"#order")),sh=x=>{x=x.slice();for(let i=x.length-1;i>0;i--){const j=Math.floor(r2()*(i+1));[x[i],x[j]]=[x[j],x[i]]}return x};
+  return sh(a.slice(0,r.n).map(([g,i])=>{const q=DB[g][i];return {id:g+":"+i,q:q[0],correct:q[1],options:sh(q.slice(1,5)),subj:q[5],grade:g}}));
 }
